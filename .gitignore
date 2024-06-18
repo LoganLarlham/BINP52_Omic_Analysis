@@ -1,0 +1,11 @@
+# Ignore everything
+**
+
+# Exclude .gitignore from being ignored to apply rules
+!.gitignore
+
+# Allow .ipynb files in any directory
+!**/
+!**/*.ipynb
+!**/*.py
+!**/*.html
