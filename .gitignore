@@ -9,3 +9,5 @@
 !**/*.ipynb
 !**/*.py
 !**/*.html
+*concat.ipynb
+*final_notebook.ipynb
