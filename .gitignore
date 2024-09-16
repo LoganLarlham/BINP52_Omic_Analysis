@@ -3,6 +3,7 @@
 
 # Exclude .gitignore from being ignored to apply rules
 !.gitignore
+!.gitattributes
 
 # Allow .ipynb files in any directory
 !**/
