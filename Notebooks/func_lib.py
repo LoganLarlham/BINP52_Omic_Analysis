@@ -3,7 +3,10 @@
 import scanpy as sc
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+import numpy as np
+import anndata as ad
+from adjustText import adjust_text
+from typing import List, Optional, Union
 
 def summarize_adata(adata, mt_gene_prefix="mt-", ribo_gene_prefixes=("Rps", "Rpl"), min_counts=500, min_genes=200, min_cells=3):
     # Calculate the total number of cells and genes
@@ -84,6 +87,9 @@ def QC_filter_adata(adata, mt_threshold=5, ribo_threshold=5, min_counts=500, min
     adata.var["mt"] = adata.var_names.str.startswith("mt-")
     adata.var["ribo"] = adata.var_names.str.startswith("Rps") | adata.var_names.str.startswith("Rpl")
 
+    #Print number of cells and genes before filtering
+    print(f"Initial AnnData has {adata.n_obs} cells and {adata.n_vars} genes")
+
     # Calculate QC metrics
     sc.pp.calculate_qc_metrics(adata, qc_vars=["mt", "ribo"], percent_top=None, log1p=False, inplace=True)
 
@@ -101,10 +107,27 @@ def QC_filter_adata(adata, mt_threshold=5, ribo_threshold=5, min_counts=500, min
     # Filter cells with less than ribo_threshold percent ribosomal genes
     adata = adata[adata.obs.pct_counts_ribo >= ribo_threshold, :]
 
+    # Print the number of cells with fewer than min_counts counts to be filtered
+    cells_with_less_than_min_counts = (adata.X.sum(axis=1) < min_counts).sum()
+    print(f"{cells_with_less_than_min_counts} of {adata.n_obs} cells have fewer than {min_counts} counts. Will be filtered")
+
     # Apply additional filtering based on counts, genes, and cells
     sc.pp.filter_cells(adata, min_counts=min_counts)
+
+    # Print the number of cells with fewer than min_genes genes to be filtered
+    cells_with_less_than_min_genes = (adata.X > 0).sum(axis=1) < min_genes
+    print(f"{cells_with_less_than_min_genes.sum()} of {adata.n_obs} cells have fewer than {min_genes} genes. Will be filtered")
+
     sc.pp.filter_cells(adata, min_genes=min_genes)
+
+    # Print the number of genes expressed in fewer than min_cells cells to be filtered
+    genes_with_less_than_min_cells = (adata.X > 0).sum(axis=0) < min_cells
+    print(f"{genes_with_less_than_min_cells.sum()} of {adata.n_vars} genes are expressed in fewer than {min_cells} cells. Will be filtered")
+
     sc.pp.filter_genes(adata, min_cells=min_cells)
+
+    # Print the total number of cells and genes after filtering
+    print(f"Filtered AnnData has {adata.n_obs} cells and {adata.n_vars} genes")
 
     # Recalculate QC metrics for the filtered data
     sc.pp.calculate_qc_metrics(adata, qc_vars=["mt", "ribo"], percent_top=None, log1p=False, inplace=True)
@@ -125,13 +148,13 @@ def visualize_QC_measures(adata, title="QC Measures"):
         
         # Combined violin plots
         combined_data = adata[list(adata.keys())[0]].concatenate(*[adata[key] for key in list(adata.keys())[1:]], batch_key="dataset", batch_categories=list(adata.keys()))
-        sc.pl.violin(combined_data, ["n_genes_by_counts", "total_counts", "pct_counts_mt", "pct_counts_ribo"], groupby="dataset", jitter=0.4, multi_panel=True)
+        sc.pl.violin(combined_data, ["n_genes_by_counts", "total_counts", "pct_counts_mt", "pct_counts_ribo"], groupby="dataset", jitter=0.4, multi_panel=True, stripplot=False)
         
         # Scatter plots for each dataset
         fig, axes = plt.subplots(1, len(adata), figsize=(15, 5))
         if len(adata) == 1:
             axes = [axes]
-        for ax, (adata_key, single_adata) in zip(axes, adata.items()):
+            
             sc.pl.scatter(single_adata, x="total_counts", y="n_genes_by_counts", color="pct_counts_mt", ax=ax, show=False)
             ax.set_xlim(0, 40000)
             ax.set_ylim(0, 6000)
@@ -242,7 +265,7 @@ def hash_demulitplex(adata, hashtag_prefix='Hashtag'):
 
 def annotate_cellcycle_mouse(adata):
     # Get cell cycle genes from the regev lab data file. sort/split into appropriate lists
-    cell_cycle_genes = [x.strip().lower().title() for x in open('../regev_lab_cell_cycle_genes.txt')]
+    cell_cycle_genes = [x.strip().lower().title() for x in open('../../regev_lab_cell_cycle_genes.txt')]
     s_genes = cell_cycle_genes[:43]
     g2m_genes = cell_cycle_genes[43:]
     cell_cycle_genes = [x.lower().title() for x in cell_cycle_genes if x.lower().title() in adata.var_names]
@@ -264,12 +287,15 @@ def find_genes(adata):
     #define some lists of genes of interest for the analysis.
     Genes_of_interest = []
     homeo_genes = ['Sall1', 'Cx3cr1', 'P2ry12', 'P2ry13', 'Olfml3', 'Tmem119', 'Cd68', 'Itgam', 'Cst3']
-    DAM_genes = ['Apoe', 'B2m', 'Ctsb', 'Lpl', 'Cst7', 'Tyrobp', 'Trem2', 'Cd9', 'Itgax', 'Cd63', 'Fth1', 'Spp1', 'Axl', 'Mertk', 'Mdk', 'Ptn']
+    DAM_genes = ['Apoe', 'B2m', 'Ctsb', 'Lpl', 'Cst7', 'Tyrobp', 'Trem2', 'Cd9', 'Itgax', 'Cd63', 'Fth1', 'Spp1', 'Axl', 'Mertk', 'Mdk', 'Ptn', 'Lgals3']
     Mapk_genes = ['Syk', 'Prkca', 'Mef2c', 'Elk4', 'Trp53', 'Mertk', 'Axl', 'Mapk14', 'Mapk1', 'Gadd45a',]
-    Nfkb_genes = ['Nfkb1', 'Tlr4', 'Nfkbia', 'Cd40', 'Tlr4', 'Rela', 'Relb']
+    Nfkb_genes = ['Nfkb1','Nfkb2', 'Tlr4', 'Nfkbia', 'Cd40', 'Tlr4', 'Rela', 'Relb', 'Irf1', 'Irf3', 'Irf4']
     Macroph_genes = ['Mrc1', 'Mrc2', 'Ccr2', 'Ly6c2', 'Lyz2', 'Vim', 'Ifi204', 'S100a10', 'Msrb1']
+    DC_genes = ['Cd14', 'Cd1a', 'Cd209', 'Itgam', 'Cd207', 'Fcer1', '33D1', 'eyfp', 'Flt3', 'Csf1r', 'Id2', 'Clec4k', 'Cd8a']
+    TIM_genes = ['Malat1', 'Tmx4', 'Jund', 'Btg2', 'Fosb', 'Fos','Jun', 'Klf4', 'Klf2', 'Gm34455']
+
     # make a dictionary of the lists to iterate through
-    gene_lists = {"Homeo": homeo_genes, "DAM": DAM_genes, "Mapk": Mapk_genes, "Nfkb": Nfkb_genes, "Macroph": Macroph_genes}
+    gene_lists = {"Homeo": homeo_genes, "DAM": DAM_genes, "Mapk": Mapk_genes, "Nfkb": Nfkb_genes, "Macroph": Macroph_genes, "DC": DC_genes, "TIM": TIM_genes}
     found_genes = {key: [] for key in gene_lists.keys()}
 
     # loop through gene lists and genes, see if it is present in the passed adata, if so append it to a list+dictionary 
@@ -350,24 +376,22 @@ def gene_expression_percentage(adata, gene_id, category, logfc_threshold=0.5):
 # gene_expression_percentage_by_category(adata, 'gene_id', 'category')
 
 
+
 def plot_proportion_heatmap_total(df, group_col, feature_col, adata, umap_color):
-    # Calculate the total number of cells
-    total_cells = len(df)
+    # Calculate the total number of cells for each genotype
+    total_genotype_cells = df.groupby(group_col).size()
     
     # Group by group_col and feature_col, then calculate size
-    proportion_df = df.groupby([group_col, feature_col]).size().unstack(fill_value=0)
+    count_df = df.groupby([group_col, feature_col]).size().unstack(fill_value=0)
     
-    # Normalize by the total number of cells in the entire population
-    proportion_df = proportion_df.apply(lambda x: (x / total_cells)*100, axis=0)
+    # Normalize by the total number of cells for each genotype
+    proportion_df = count_df.div(total_genotype_cells, axis=0) * 100
     
-    # Transpose for heatmap plotting
-    proportion_df = proportion_df.T
-
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
 
     # Plotting the heatmap
-    sns.heatmap(proportion_df, annot=True, cmap='coolwarm', fmt=".3f", linewidths=.5, ax=ax1)
-    ax1.set_title(f'Proportion of {feature_col} by {group_col}')
+    sns.heatmap(proportion_df.T, annot=True, cmap='crest', fmt=".2f", linewidths=.5, ax=ax1)
+    ax1.set_title(f'Proportion of {group_col} by {feature_col}')
 
     # Plotting the UMAP
     sc.pl.umap(adata, color=umap_color, legend_loc="on data", ax=ax2, show=False)
@@ -377,14 +401,20 @@ def plot_proportion_heatmap_total(df, group_col, feature_col, adata, umap_color)
     plt.show()
 
 def plot_proportion_heatmap(df, group_col, feature_col, adata, umap_color):
-    proportion_df = df.groupby([group_col, feature_col]).size().unstack(fill_value=0)
-    proportion_df = proportion_df.apply(lambda x: x / x.sum(), axis=1)
-    proportion_df = proportion_df.T
+    # Group by group_col and feature_col, then calculate size
+    count_df = df.groupby([group_col, feature_col]).size().unstack(fill_value=0)
+    
+    # Normalize to get the percentage of each feature type within each group
+    proportion_df = count_df.div(count_df.sum(axis=0), axis=1) * 100
+
+    # Debugging: Print the proportion DataFrame to verify
+    print(proportion_df)
+    print(proportion_df.sum(axis=1))  # This should show 100 for each row
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
 
     # Plotting the heatmap
-    sns.heatmap(proportion_df, annot=True, cmap='coolwarm', fmt=".2f", linewidths=.5, ax=ax1)
+    sns.heatmap(proportion_df, annot=True, cmap='crest', fmt=".2f", linewidths=.5, ax=ax1)
     ax1.set_title(f'Proportion of {feature_col} by {group_col}')
 
     # Plotting the UMAP
@@ -393,3 +423,132 @@ def plot_proportion_heatmap(df, group_col, feature_col, adata, umap_color):
 
     plt.tight_layout()
     plt.show()
+
+def plot_volcano(adata, group='LPS', logfc_threshold=0.3, pval_threshold=0.05):
+## based on the code from the following link:
+## https://hemtools.readthedocs.io/en/latest/content/Bioinformatics_Core_Competencies/Volcanoplot.html
+
+    # Extract log fold changes and adjusted p-values for the specified group
+    logfc = adata.uns['rank_genes_groups']['logfoldchanges'][group]
+    pvals_adj = adata.uns['rank_genes_groups']['pvals_adj'][group]
+    
+    # Convert adjusted p-values to -log10 scale
+    neg_log_pvals = -np.log10(pvals_adj)
+    
+    # Plot all genes
+    plt.figure(figsize=(10, 7))
+    plt.scatter(logfc, neg_log_pvals, s=1, label="Not significant", color='grey')
+
+    # Identify up- and down-regulated genes based on thresholds
+    down = (logfc <= -logfc_threshold) & (pvals_adj <= pval_threshold)
+    up = (logfc >= logfc_threshold) & (pvals_adj <= pval_threshold)
+
+    # Plot down-regulated genes
+    plt.scatter(logfc[down], neg_log_pvals[down], s=3, label="Down-regulated", color="blue")
+
+    # Plot up-regulated genes
+    plt.scatter(logfc[up], neg_log_pvals[up], s=3, label="Up-regulated", color="red")
+
+    # Annotate significant points
+    texts = []
+    for i in np.where(up)[0]:
+        texts.append(plt.text(logfc[i], neg_log_pvals[i], adata.uns['rank_genes_groups']['names'][group][i]))
+
+    adjust_text(texts, arrowprops=dict(arrowstyle="-", color='black', lw=0.1))
+
+    # Add labels and lines for thresholds
+    plt.xlabel("Log Fold Change (logFC)")
+    plt.ylabel("-Log10 Adjusted P-Value (-logFDR)")
+    plt.axvline(-logfc_threshold, color="grey", linestyle="--")
+    plt.axvline(logfc_threshold, color="grey", linestyle="--")
+    plt.axhline(-np.log10(pval_threshold), color="grey", linestyle="--")
+    plt.xlim(-10,10)
+    plt.ylim(0, 20)
+    plt.legend()
+    plt.title(f"Volcano Plot for {group}")
+    plt.show()
+
+def plot_volcano2(
+    adata,
+    group,
+    key="rank_genes_groups",
+    title=None,
+    adjusted_pvals=True,
+    show=True,
+    logfc_threshold=0.2,
+    filter_kwargs=None,
+    **kwargs
+):
+    """
+    Plots the results of :func:`scanpy.tl.rank_genes_groups` in the form of a volcano plot.
+
+    Parameters
+    ----------
+    adata
+        Annotated data matrix.
+    group
+        Which group (as in :func:`scanpy.tl.rank_genes_groups`’s groupby argument) to return
+        results from. Can be a list. All groups are returned if `groups` is None.
+    key
+        Key differential expression groups were stored under.
+    title
+        Title of the resulting plot.
+    adjusted_pvals
+        Use adjusted p-values instead of raw p-values.
+    show
+        Whether to show the plot or return it.
+    logfc_threshold
+        Threshold for log fold change to determine vertical lines and coloring of points.
+    filter_kwargs
+        Keyword arguments to pass into :func:`scanpy.get.rank_genes_groups_df`.
+    kwargs
+        Keyword arguments to pass into :func:`seaborn.scatterplot`.
+
+    Returns
+    -------
+    If `show = False` returns the current axes. If `show = True` returns nothing.
+    """
+    if filter_kwargs is None:
+        filter_kwargs = {}
+    if title is None:
+        title = f"{key} {group}"
+
+    # Pull dataframe from adata object, and select columns of interest
+    de_df = sc.get.rank_genes_groups_df(adata, group=group, key=key, **filter_kwargs)
+    logfold = de_df["logfoldchanges"]
+    pvals = de_df["pvals_adj" if adjusted_pvals else "pvals"]
+    neg_log_pvals = np.negative(np.log10(pvals))
+
+    # Determine color based on thresholds
+    colors = np.where(
+        (logfold > logfc_threshold) & (neg_log_pvals > -np.log10(0.05)), "red",
+        np.where(
+            (logfold < -logfc_threshold) & (neg_log_pvals > -np.log10(0.05)), "blue", "lightgray"
+        )
+    )
+
+    # Plot logfold and -log pvals
+    ax = sns.scatterplot(
+        x=logfold,
+        y=neg_log_pvals,
+        hue=colors,  # Use the colors array for coloring
+        palette={"red": "red", "blue": "blue", "lightgray": "lightgray"},
+        legend=None,
+        size=0.1,
+        **kwargs
+    )
+
+    # Add vertical lines at logfc_threshold and -logfc_threshold
+    ax.axvline(logfc_threshold, color="gray", linestyle="--")
+    ax.axvline(-logfc_threshold, color="gray", linestyle="--")
+
+    # Add significance line at p = 0.05 and set title and axis labels
+    ax.axhline(-np.log10(0.05), 0, 1, color="lightgray", zorder=-10)
+    ax.set(ylabel="-log10(pval)", xlabel="logfoldchange", title=title)
+    ax.set_xlim(-10, 10)
+    ax.set_ylim(0, 20)
+
+    if show:
+        plt.show()
+    else:
+        return ax
