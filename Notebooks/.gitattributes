@@ -1,1 +1,2 @@
 *.ipynb filter=lfs diff=lfs merge=lfs -text
+Analysis/analysis1_notebook.ipynb filter=lfs diff=lfs merge=lfs -text
