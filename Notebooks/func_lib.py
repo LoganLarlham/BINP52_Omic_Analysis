@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import anndata as ad
+import pandas as pd
+from matplotlib_venn import venn2
 from adjustText import adjust_text
 from typing import List, Optional, Union
 
@@ -424,131 +426,258 @@ def plot_proportion_heatmap(df, group_col, feature_col, adata, umap_color):
     plt.tight_layout()
     plt.show()
 
-def plot_volcano(adata, group='LPS', logfc_threshold=0.3, pval_threshold=0.05):
-## based on the code from the following link:
-## https://hemtools.readthedocs.io/en/latest/content/Bioinformatics_Core_Competencies/Volcanoplot.html
+# def plot_volcano(adata, group='LPS', logfc_threshold=0.3, pval_threshold=0.05):
+# ## based on the code from the following link:
+# ## https://hemtools.readthedocs.io/en/latest/content/Bioinformatics_Core_Competencies/Volcanoplot.html
 
+#     # Extract log fold changes and adjusted p-values for the specified group
+#     logfc = adata.uns['rank_genes_groups']['logfoldchanges'][group]
+#     pvals_adj = adata.uns['rank_genes_groups']['pvals_adj'][group]
+    
+#     # Convert adjusted p-values to -log10 scale
+#     neg_log_pvals = -np.log10(pvals_adj)
+    
+#     # Plot all genes
+#     plt.figure(figsize=(10, 7))
+#     plt.scatter(logfc, neg_log_pvals, s=1, label="Not significant", color='grey')
+
+#     # Identify up- and down-regulated genes based on thresholds
+#     down = (logfc <= -logfc_threshold) & (pvals_adj <= pval_threshold)
+#     up = (logfc >= logfc_threshold) & (pvals_adj <= pval_threshold)
+
+#     # Plot down-regulated genes
+#     plt.scatter(logfc[down], neg_log_pvals[down], s=3, label="Down-regulated", color="blue")
+
+#     # Plot up-regulated genes
+#     plt.scatter(logfc[up], neg_log_pvals[up], s=3, label="Up-regulated", color="red")
+
+#     # Annotate significant points
+#     texts = []
+#     for i in np.where(up)[0]:
+#         texts.append(plt.text(logfc[i], neg_log_pvals[i], adata.uns['rank_genes_groups']['names'][group][i]))
+
+
+#     adjust_text(texts, arrowprops=dict(arrowstyle="-", color='black', lw=0.1))
+
+#     # Add labels and lines for thresholds
+#     plt.xlabel("Log Fold Change (logFC)")
+#     plt.ylabel("-Log10 Adjusted P-Value (-logFDR)")
+#     plt.axvline(-logfc_threshold, color="grey", linestyle="--")
+#     plt.axvline(logfc_threshold, color="grey", linestyle="--")
+#     plt.axhline(-np.log10(pval_threshold), color="grey", linestyle="--")
+#     plt.xlim(-10,10)
+#     plt.ylim(0, 20)
+#     plt.legend()
+#     plt.title(f"Volcano Plot for {group}")
+#     plt.show()
+
+
+def plot_volcano(adata, group='LPS', logfc_threshold=0.3, pval_threshold=0.05, top_n=20):
+    # Create a DataFrame with necessary data
+    df = pd.DataFrame({
+        'logfc': adata.uns['rank_genes_groups']['logfoldchanges'][group],
+        'pvals_adj': adata.uns['rank_genes_groups']['pvals_adj'][group],
+        'gene_names': adata.uns['rank_genes_groups']['names'][group]
+    })
+
+    # Calculate -log10 adjusted p-values
+    df['neg_log_pvals'] = -np.log10(df['pvals_adj'])
+
+
+
+    #Check neg_log_pvals for inf and nan values
+    neg_log_pvals = np.array(df['neg_log_pvals'])
+    print(f"Number of inf values in neg_log_pvals: {np.isinf(neg_log_pvals).sum()}")
+    print(f"Number of nan values in neg_log_pvals: {np.isnan(neg_log_pvals).sum()}")
+
+    # Replace inf and nan values with 0
+    df['neg_log_pvals'] = df['neg_log_pvals'].replace([np.inf, -np.inf], 0)
+
+
+    # Assign significance categories
+    df['significance'] = 'Not significant'
+    df.loc[(df['logfc'] >= logfc_threshold) & (df['pvals_adj'] <= pval_threshold), 'significance'] = 'Up-regulated'
+    df.loc[(df['logfc'] <= -logfc_threshold) & (df['pvals_adj'] <= pval_threshold), 'significance'] = 'Down-regulated'
+
+    # Define color mapping
+    colors = {'Not significant': 'grey', 'Up-regulated': 'red', 'Down-regulated': 'blue'}
+
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(10, 7))
+
+    # Plot each category
+    for key, group_df in df.groupby('significance'):
+        ax.scatter(group_df['logfc'], group_df['neg_log_pvals'], s=3, color=colors[key], label=key, alpha=0.7)
+
+    # Annotate top N up-regulated genes
+    up_genes = df[df['significance'] == 'Up-regulated']
+    top_up_genes = up_genes.nsmallest(top_n, 'pvals_adj')
+
+    for _, row in top_up_genes.iterrows():
+        ax.text(row['logfc'], row['neg_log_pvals'], row['gene_names'], fontsize=8)
+
+    # Annotate top N down-regulated genes
+    down_genes = df[df['significance'] == 'Down-regulated']
+    top_down_genes = down_genes.nsmallest(top_n, 'pvals_adj')
+
+    for _, row in top_down_genes.iterrows():
+        ax.text(row['logfc'], row['neg_log_pvals'], row['gene_names'], fontsize=8)
+
+    # Create a dictionary of top N up- and down-regulated genes
+    annotated_genes = {
+        'Up-regulated': top_up_genes['gene_names'].tolist(),
+        'Down-regulated': top_down_genes['gene_names'].tolist()
+    }
+
+
+    # Add threshold lines
+    ax.axvline(-logfc_threshold, color="grey", linestyle="--")
+    ax.axvline(logfc_threshold, color="grey", linestyle="--")
+    ax.axhline(-np.log10(pval_threshold), color="grey", linestyle="--")
+
+    # Set labels and title
+    ax.set_xlabel("Log Fold Change (logFC)")
+    ax.set_ylabel("-Log10 Adjusted P-Value (-logFDR)")
+    ax.set_xlim(-10, 10)
+    ax.set_ylim(0, df['neg_log_pvals'].max() + 1)
+    ax.legend()
+    ax.set_title(f"Volcano Plot for {group}")
+
+    # Improve layout
+    plt.tight_layout()
+    plt.show()
+
+    return annotated_genes
+
+def get_significant_genes(adata, group='', logfc_threshold=0.3, pval_threshold=0.05, top_n=None):
     # Extract log fold changes and adjusted p-values for the specified group
     logfc = adata.uns['rank_genes_groups']['logfoldchanges'][group]
     pvals_adj = adata.uns['rank_genes_groups']['pvals_adj'][group]
     
-    # Convert adjusted p-values to -log10 scale
-    neg_log_pvals = -np.log10(pvals_adj)
-    
-    # Plot all genes
-    plt.figure(figsize=(10, 7))
-    plt.scatter(logfc, neg_log_pvals, s=1, label="Not significant", color='grey')
-
     # Identify up- and down-regulated genes based on thresholds
     down = (logfc <= -logfc_threshold) & (pvals_adj <= pval_threshold)
     up = (logfc >= logfc_threshold) & (pvals_adj <= pval_threshold)
+    
+    # Get the names of the significant genes
+    down_genes = adata.uns['rank_genes_groups']['names'][group][down]
+    up_genes = adata.uns['rank_genes_groups']['names'][group][up]
 
-    # Plot down-regulated genes
-    plt.scatter(logfc[down], neg_log_pvals[down], s=3, label="Down-regulated", color="blue")
+    # sort the genes by pvals_adj
+    down_genes = [x for _, x in sorted(zip(adata.uns['rank_genes_groups']['pvals_adj'][group][down], down_genes))]
+    up_genes = [x for _, x in sorted(zip(adata.uns['rank_genes_groups']['pvals_adj'][group][up], up_genes))]
 
-    # Plot up-regulated genes
-    plt.scatter(logfc[up], neg_log_pvals[up], s=3, label="Up-regulated", color="red")
+    # If top_n is provided, take only the first top_n entries
+    if top_n is not None:
+        down_genes = down_genes[:top_n]
+        up_genes = up_genes[:top_n]
+    
+    
+    return down_genes, up_genes
 
-    # Annotate significant points
-    texts = []
-    for i in np.where(up)[0]:
-        texts.append(plt.text(logfc[i], neg_log_pvals[i], adata.uns['rank_genes_groups']['names'][group][i]))
+def venn_gene(adata1, adata2, group, logfc_threshold=0.3, pval_threshold=0.05, top_n=None):
+    
+    
+    # Get the significant genes for each group
 
-    adjust_text(texts, arrowprops=dict(arrowstyle="-", color='black', lw=0.1))
-
-    # Add labels and lines for thresholds
-    plt.xlabel("Log Fold Change (logFC)")
-    plt.ylabel("-Log10 Adjusted P-Value (-logFDR)")
-    plt.axvline(-logfc_threshold, color="grey", linestyle="--")
-    plt.axvline(logfc_threshold, color="grey", linestyle="--")
-    plt.axhline(-np.log10(pval_threshold), color="grey", linestyle="--")
-    plt.xlim(-10,10)
-    plt.ylim(0, 20)
-    plt.legend()
-    plt.title(f"Volcano Plot for {group}")
+    if top_n is not None:
+        down_genes1, up_genes1 = get_significant_genes(adata1, group, logfc_threshold, pval_threshold, top_n)
+        down_genes2, up_genes2 = get_significant_genes(adata2, group, logfc_threshold, pval_threshold, top_n)
+    else:
+        down_genes1, up_genes1 = get_significant_genes(adata1, group, logfc_threshold, pval_threshold)
+        down_genes2, up_genes2 = get_significant_genes(adata2, group, logfc_threshold, pval_threshold)
+    
+    # Create the Venn diagram
+    plt.figure(figsize=(12, 8))
+    venn2([set(up_genes1), set(up_genes2)])
+    plt.title("Up-regulated Genes")
     plt.show()
 
-def plot_volcano2(
-    adata,
-    group,
-    key="rank_genes_groups",
-    title=None,
-    adjusted_pvals=True,
-    show=True,
-    logfc_threshold=0.2,
-    filter_kwargs=None,
-    **kwargs
-):
-    """
-    Plots the results of :func:`scanpy.tl.rank_genes_groups` in the form of a volcano plot.
+    plt.figure(figsize=(12, 8))
+    venn2([set(down_genes1), set(down_genes2)], set_labels=[adata1, adata2])
+    plt.title("Down-regulated Genes")
+    plt.show()
 
-    Parameters
-    ----------
-    adata
-        Annotated data matrix.
-    group
-        Which group (as in :func:`scanpy.tl.rank_genes_groups`’s groupby argument) to return
-        results from. Can be a list. All groups are returned if `groups` is None.
-    key
-        Key differential expression groups were stored under.
-    title
-        Title of the resulting plot.
-    adjusted_pvals
-        Use adjusted p-values instead of raw p-values.
-    show
-        Whether to show the plot or return it.
-    logfc_threshold
-        Threshold for log fold change to determine vertical lines and coloring of points.
-    filter_kwargs
-        Keyword arguments to pass into :func:`scanpy.get.rank_genes_groups_df`.
-    kwargs
-        Keyword arguments to pass into :func:`seaborn.scatterplot`.
+# def plot_volcano2(
+#     adata,
+#     group,
+#     key="rank_genes_groups",
+#     title=None,
+#     adjusted_pvals=True,
+#     show=True,
+#     logfc_threshold=0.2,
+#     filter_kwargs=None,
+#     **kwargs
+# ):
+#     """
+#     Plots the results of :func:`scanpy.tl.rank_genes_groups` in the form of a volcano plot.
 
-    Returns
-    -------
-    If `show = False` returns the current axes. If `show = True` returns nothing.
-    """
-    if filter_kwargs is None:
-        filter_kwargs = {}
-    if title is None:
-        title = f"{key} {group}"
+#     Parameters
+#     ----------
+#     adata
+#         Annotated data matrix.
+#     group
+#         Which group (as in :func:`scanpy.tl.rank_genes_groups`’s groupby argument) to return
+#         results from. Can be a list. All groups are returned if `groups` is None.
+#     key
+#         Key differential expression groups were stored under.
+#     title
+#         Title of the resulting plot.
+#     adjusted_pvals
+#         Use adjusted p-values instead of raw p-values.
+#     show
+#         Whether to show the plot or return it.
+#     logfc_threshold
+#         Threshold for log fold change to determine vertical lines and coloring of points.
+#     filter_kwargs
+#         Keyword arguments to pass into :func:`scanpy.get.rank_genes_groups_df`.
+#     kwargs
+#         Keyword arguments to pass into :func:`seaborn.scatterplot`.
 
-    # Pull dataframe from adata object, and select columns of interest
-    de_df = sc.get.rank_genes_groups_df(adata, group=group, key=key, **filter_kwargs)
-    logfold = de_df["logfoldchanges"]
-    pvals = de_df["pvals_adj" if adjusted_pvals else "pvals"]
-    neg_log_pvals = np.negative(np.log10(pvals))
+#     Returns
+#     -------
+#     If `show = False` returns the current axes. If `show = True` returns nothing.
+#     """
+#     if filter_kwargs is None:
+#         filter_kwargs = {}
+#     if title is None:
+#         title = f"{key} {group}"
 
-    # Determine color based on thresholds
-    colors = np.where(
-        (logfold > logfc_threshold) & (neg_log_pvals > -np.log10(0.05)), "red",
-        np.where(
-            (logfold < -logfc_threshold) & (neg_log_pvals > -np.log10(0.05)), "blue", "lightgray"
-        )
-    )
+#     # Pull dataframe from adata object, and select columns of interest
+#     de_df = sc.get.rank_genes_groups_df(adata, group=group, key=key, **filter_kwargs)
+#     logfold = de_df["logfoldchanges"]
+#     pvals = de_df["pvals_adj" if adjusted_pvals else "pvals"]
+#     neg_log_pvals = np.negative(np.log10(pvals))
 
-    # Plot logfold and -log pvals
-    ax = sns.scatterplot(
-        x=logfold,
-        y=neg_log_pvals,
-        hue=colors,  # Use the colors array for coloring
-        palette={"red": "red", "blue": "blue", "lightgray": "lightgray"},
-        legend=None,
-        size=0.1,
-        **kwargs
-    )
+#     # Determine color based on thresholds
+#     colors = np.where(
+#         (logfold > logfc_threshold) & (neg_log_pvals > -np.log10(0.05)), "red",
+#         np.where(
+#             (logfold < -logfc_threshold) & (neg_log_pvals > -np.log10(0.05)), "blue", "lightgray"
+#         )
+#     )
 
-    # Add vertical lines at logfc_threshold and -logfc_threshold
-    ax.axvline(logfc_threshold, color="gray", linestyle="--")
-    ax.axvline(-logfc_threshold, color="gray", linestyle="--")
+#     # Plot logfold and -log pvals
+#     ax = sns.scatterplot(
+#         x=logfold,
+#         y=neg_log_pvals,
+#         hue=colors,  # Use the colors array for coloring
+#         palette={"red": "red", "blue": "blue", "lightgray": "lightgray"},
+#         legend=None,
+#         size=0.1,
+#         **kwargs
+#     )
 
-    # Add significance line at p = 0.05 and set title and axis labels
-    ax.axhline(-np.log10(0.05), 0, 1, color="lightgray", zorder=-10)
-    ax.set(ylabel="-log10(pval)", xlabel="logfoldchange", title=title)
-    ax.set_xlim(-10, 10)
-    ax.set_ylim(0, 20)
+#     # Add vertical lines at logfc_threshold and -logfc_threshold
+#     ax.axvline(logfc_threshold, color="gray", linestyle="--")
+#     ax.axvline(-logfc_threshold, color="gray", linestyle="--")
 
-    if show:
-        plt.show()
-    else:
-        return ax
+#     # Add significance line at p = 0.05 and set title and axis labels
+#     ax.axhline(-np.log10(0.05), 0, 1, color="lightgray", zorder=-10)
+#     ax.set(ylabel="-log10(pval)", xlabel="logfoldchange", title=title)
+#     ax.set_xlim(-10, 10)
+#     ax.set_ylim(0, 20)
+
+#     if show:
+#         plt.show()
+#     else:
+#         return ax
