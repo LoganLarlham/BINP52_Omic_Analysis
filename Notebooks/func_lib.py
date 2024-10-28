@@ -7,8 +7,8 @@ import numpy as np
 import anndata as ad
 import pandas as pd
 from matplotlib_venn import venn2
-from adjustText import adjust_text
 from typing import List, Optional, Union
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 def summarize_adata(adata, mt_gene_prefix="mt-", ribo_gene_prefixes=("Rps", "Rpl"), min_counts=500, min_genes=200, min_cells=3):
     # Calculate the total number of cells and genes
@@ -264,6 +264,70 @@ def hash_demulitplex(adata, hashtag_prefix='Hashtag'):
 # Example usage:
 # adata = sc.read_h5ad('path_to_your_anndata.h5ad')
 # adata = demultiplex_droplets(adata)
+
+
+def plot_total_counts_vs_cells(
+    adata, 
+    bins=250, 
+    zoom_x_range=(0, 3000), 
+    zoom_y_range=(0, 600), 
+    xlabel="Total counts", 
+    ylabel="Number of cells", 
+    figure_size=(10, 6), 
+    inset_size=("30%", "30%"), 
+    inset_location="upper right", 
+    border_pad=2, 
+    rotation=45
+):
+    """
+    Plots the total counts vs the number of cells for a given anndata object, with an optional zoomed inset.
+    
+    Parameters:
+        adata (AnnData): The annotated data matrix.
+        bins (int): Number of bins for the histogram.
+        zoom_x_range (tuple): Range for the x-axis in the zoomed inset (default: (0, 3000)).
+        zoom_y_range (tuple): Range for the y-axis in the zoomed inset (default: (0, 600)).
+        xlabel (str): Label for the x-axis (default: "Total counts").
+        ylabel (str): Label for the y-axis (default: "Number of cells").
+        figure_size (tuple): Size of the main figure (default: (10, 6)).
+        inset_size (tuple): Size of the inset plot as a percentage of the main plot (default: ("30%", "30%")).
+        inset_location (str): Location of the inset in the plot (default: "upper right").
+        border_pad (int): Padding around the inset plot (default: 2).
+        rotation (int): Rotation for the x-axis tick labels (default: 45).
+    """
+    # Main plot
+    fig, ax = plt.subplots(figsize=figure_size)
+    
+    # Plot the histogram of total counts
+    ax.hist(adata.obs["total_counts"], bins=bins, log=False, label="Total counts in bins")
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    
+    # Set x-ticks and rotate labels
+    ax.set_xticks(range(0, int(adata.obs["total_counts"].max()) + 1000, 1000))
+    plt.xticks(rotation=rotation)
+    
+    # Create inset plot for zoomed area
+    axins = inset_axes(ax, width=inset_size[0], height=inset_size[1], loc=inset_location, borderpad=border_pad)
+    axins.hist(adata.obs["total_counts"], bins=bins, log=False)
+    
+    # Set the zoom range in the inset plot
+    x1, x2 = zoom_x_range
+    y1, y2 = zoom_y_range
+    axins.set_xlim(x1, x2)
+    axins.set_ylim(y1, y2)
+    
+    # Add a rectangle to highlight the zoomed area in the main plot
+    rect = plt.Rectangle((x1, y1), x2-x1, y2-y1, edgecolor='r', facecolor='none', linestyle='--')
+    ax.add_patch(rect)
+    
+    # Show the plot
+    plt.show()
+
+# Example usage:
+# plot_total_counts_vs_cells(adata, bins=200, zoom_x_range=(0, 5000), zoom_y_range=(0, 1000))
+
+
 
 def annotate_cellcycle_mouse(adata):
     # Get cell cycle genes from the regev lab data file. sort/split into appropriate lists
