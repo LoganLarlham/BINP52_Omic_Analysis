@@ -6,9 +6,21 @@ import seaborn as sns
 import numpy as np
 import anndata as ad
 import pandas as pd
+import scipy.sparse
+from adjustText import adjust_text
 from matplotlib_venn import venn2
 from typing import List, Optional, Union
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+homeo_genes = ['Sall1', 'Cx3cr1', 'P2ry12', 'Olfml3', 'Tmem119', 'Cd68', 'Itgam', 'Cst3']
+DAM_genes = ['Apoe', 'B2m', 'Ctsb', 'Lpl', 'Cst7', 'Tyrobp', 'Trem2', 'Cd9', 'Itgax', 'Cd63', 'Fth1', 'Fabp5', 'Spp1', 'Axl', 'Mertk', 'Mdk', 'Ptn', 'Lgals3']
+Mapk_genes = ['Syk', 'Prkca', 'Mef2c', 'Elk4', 'Trp53', 'Mertk', 'Axl', 'Mapk14', 'Mapk1', 'Gadd45a',]
+Nfkb_genes = ['Nfkb1','Nfkb2', 'Tlr4', 'Nfkbia', 'Cd40', 'Tlr4', 'Rela', 'Relb', 'Irf1', 'Irf3', 'Irf4']
+Macroph_genes = ['Mrc1', 'Mrc2', 'Ccr2', 'Ly6c2', 'Lyz2', 'Vim', 'Ifi204', 'S100a10', 'Msrb1']
+DC_genes = ['Cd14', 'Cd1a', 'Cd209', 'Itgam', 'Cd207', 'Fcer1', '33D1', 'eyfp', 'Flt3', 'Csf1r', 'Id2', 'Clec4k', 'Cd8a']
+TIM_genes = ['Malat1', 'Tmx4', 'Jund', 'Btg2', 'Fosb', 'Fos','Jun', 'Klf4', 'Klf2', 'Gm34455']
+
+
 
 def summarize_adata(adata, mt_gene_prefix="mt-", ribo_gene_prefixes=("Rps", "Rpl"), min_counts=500, min_genes=200, min_cells=3):
     # Calculate the total number of cells and genes
@@ -213,7 +225,7 @@ def visualize_QC_measures(adata, title="QC Measures"):
         plt.show()
 
 
-def hash_demulitplex(adata, hashtag_prefix='Hashtag'):
+def hash_demulitplex(adata, hashtag_prefix='Hashtag', number_of_noise_barcodes=None):
     """
     Function to demultiplex droplets using the Hashsolo package.
     
@@ -235,9 +247,15 @@ def hash_demulitplex(adata, hashtag_prefix='Hashtag'):
 
     # Extract hashtag data
     hto = adata[:, hashtag_genes].copy()
+
+    # Transfer counts from hto.X to hto.obs
+    hto.obs[hto.var_names] = hto.X.toarray()
     
     # Run HashSolo
-    hashsolo.hashsolo(hto)
+    if number_of_noise_barcodes is not None:
+        hashsolo.hashsolo(hto, number_of_noise_barcodes=number_of_noise_barcodes)
+    else:
+        hashsolo.hashsolo(hto)
 
     # Print the number of predicted singlets, doublets, and negatives
     singlets = sum(hto.obs['most_likely_hypothesis'] == 1)
@@ -349,35 +367,293 @@ def annotate_cellcycle_mouse(adata):
     return adata
 
 # Function to generate a dictionary of lists of genes relevant to analysis which are present in the dataset
-def find_genes(adata):
-    #define some lists of genes of interest for the analysis.
-    Genes_of_interest = []
-    homeo_genes = ['Sall1', 'Cx3cr1', 'P2ry12', 'P2ry13', 'Olfml3', 'Tmem119', 'Cd68', 'Itgam', 'Cst3']
-    DAM_genes = ['Apoe', 'B2m', 'Ctsb', 'Lpl', 'Cst7', 'Tyrobp', 'Trem2', 'Cd9', 'Itgax', 'Cd63', 'Fth1', 'Spp1', 'Axl', 'Mertk', 'Mdk', 'Ptn', 'Lgals3']
-    Mapk_genes = ['Syk', 'Prkca', 'Mef2c', 'Elk4', 'Trp53', 'Mertk', 'Axl', 'Mapk14', 'Mapk1', 'Gadd45a',]
-    Nfkb_genes = ['Nfkb1','Nfkb2', 'Tlr4', 'Nfkbia', 'Cd40', 'Tlr4', 'Rela', 'Relb', 'Irf1', 'Irf3', 'Irf4']
-    Macroph_genes = ['Mrc1', 'Mrc2', 'Ccr2', 'Ly6c2', 'Lyz2', 'Vim', 'Ifi204', 'S100a10', 'Msrb1']
-    DC_genes = ['Cd14', 'Cd1a', 'Cd209', 'Itgam', 'Cd207', 'Fcer1', '33D1', 'eyfp', 'Flt3', 'Csf1r', 'Id2', 'Clec4k', 'Cd8a']
-    TIM_genes = ['Malat1', 'Tmx4', 'Jund', 'Btg2', 'Fosb', 'Fos','Jun', 'Klf4', 'Klf2', 'Gm34455']
+def find_genes(adata, marker_genes: dict) -> dict:
 
-    # make a dictionary of the lists to iterate through
-    gene_lists = {"Homeo": homeo_genes, "DAM": DAM_genes, "Mapk": Mapk_genes, "Nfkb": Nfkb_genes, "Macroph": Macroph_genes, "DC": DC_genes, "TIM": TIM_genes}
-    found_genes = {key: [] for key in gene_lists.keys()}
+    #use supplied marker_genes dictionary to find genes of interest
+    Genes_of_interest = []
+    found_genes = {key: [] for key in marker_genes.keys()}
 
     # loop through gene lists and genes, see if it is present in the passed adata, if so append it to a list+dictionary 
     # so we have a dicitonary of lists of only genes in the dataset, as well as a list of all genes from the different types
-    for gene_list_name, gene_list in gene_lists.items():
+    for gene_list_name, gene_list in marker_genes.items():
         for gene in gene_list:
             if gene in adata.var.index:
                 print(f" ✓ {gene} is in adata.var")
-                Genes_of_interest.append(gene)
                 found_genes[gene_list_name].append(gene)
             else:
                 print(f"{gene} is not in adata.var")
 
-    return Genes_of_interest, found_genes
+    return found_genes
 
-import scanpy as sc
+
+
+def plot_umap_with_top_genes(adata, umap_color=None, n_top_genes=3):
+    """
+    Plots a square UMAP embedding with clusters colored by 'umap_color' on the left,
+    and displays individual tables for each cluster stacked vertically on the right.
+    Each table shows the top 'n_top_genes' genes for the cluster, with gene names in the top row,
+    and their log fold changes, -10log(p-values), 'pts', and mean expression beneath.
+    The first column contains the labels 'Gene', 'LFC', '-10logp', 'pts', and 'MeanExpr'.
+    Gene names are colored red if the log fold change is positive and blue if negative.
+
+    Parameters:
+    - adata: AnnData object containing your single-cell data.
+    - umap_color: str, the key in adata.obs to color the UMAP plot (e.g., 'leiden_0.5').
+    - n_top_genes: int, number of top genes to display for each cluster.
+
+    This function assumes that:
+    - Differential expression analysis has been performed and the results are stored in adata.uns['rank_genes_groups'].
+    - The name of the adata object is stored in adata.uns['name'].
+    - 'pts' is stored in adata.uns['rank_genes_groups']['pts'] as a pandas DataFrame.
+    """
+    # Helper function to compute mean expression per group
+    def grouped_obs_mean(adata, group_key, layer=None):
+        """
+        Computes the mean expression of genes for each group and the rest of the cells.
+
+        Parameters:
+        - adata: AnnData object containing your single-cell data.
+        - group_key: str, the key in adata.obs to group the cells (e.g., 'leiden_0.5').
+        - layer: str or None, the layer of adata to use for expression values.
+
+        Returns:
+        - mean_expr_df: DataFrame of mean expressions for each group.
+        - mean_expr_rest_df: DataFrame of mean expressions for the rest of the cells.
+        """
+        if layer is not None:
+            getX = lambda x: x.layers[layer]
+        else:
+            getX = lambda x: x.X
+
+        groups = adata.obs[group_key].unique()
+        mean_expr_df = pd.DataFrame(index=adata.var_names)
+        mean_expr_rest_df = pd.DataFrame(index=adata.var_names)
+
+        for group in groups:
+            # Cells in the group
+            idx_in_group = adata.obs[group_key] == group
+            # Cells not in the group
+            idx_rest = ~idx_in_group
+
+            # Mean expression in the group
+            X_in_group = getX(adata[idx_in_group])
+
+            if isinstance(X_in_group, (scipy.sparse.csr_matrix, scipy.sparse.csc_matrix)):
+                mean_expr_in_group = X_in_group.mean(axis=0).A1  # Convert to 1D array
+            else:
+                mean_expr_in_group = np.asarray(X_in_group.mean(axis=0)).ravel()
+
+            mean_expr_df[group] = mean_expr_in_group
+
+            # Mean expression in the rest of the cells
+            X_rest = getX(adata[idx_rest])
+
+            if isinstance(X_rest, (scipy.sparse.csr_matrix, scipy.sparse.csc_matrix)):
+                mean_expr_rest = X_rest.mean(axis=0).A1  # Convert to 1D array
+            else:
+                mean_expr_rest = np.asarray(X_rest.mean(axis=0)).ravel()
+
+            mean_expr_rest_df[group] = mean_expr_rest
+
+        return mean_expr_df, mean_expr_rest_df
+
+    # Retrieve adata name from adata.uns['name']
+    adata_name = adata.uns.get('name', 'adata')
+
+    # Access the rank genes groups data
+    rank_genes_groups = adata.uns['rank_genes_groups']
+    gene_names = rank_genes_groups['names']  # Structured array
+    logfoldchanges = rank_genes_groups['logfoldchanges']
+    pvals_adj = rank_genes_groups['pvals_adj']
+
+    # Access 'pts' as a DataFrame
+    pts = adata.uns['rank_genes_groups']['pts']
+    pts_rest = adata.uns['rank_genes_groups']['pts_rest']
+
+    # Compute mean expression per group
+    mean_expr_df, mean_expr_rest_df = grouped_obs_mean(adata, group_key=umap_color)
+
+    # Get group names from rank_genes_groups
+    group_names = gene_names.dtype.names
+
+    num_groups = len(group_names)
+
+    # Calculate figure height based on number of groups
+    fig_height = max(6, num_groups * 2)  # Ensure minimum height
+    fig_width = 14  # Wider figure to accommodate both UMAP and tables
+
+    fig = plt.figure(figsize=(fig_width, fig_height))
+    gs = fig.add_gridspec(nrows=num_groups, ncols=2, width_ratios=[1, 1.5])
+
+    # Create the UMAP plot axis occupying the left side
+    ax_umap = fig.add_subplot(gs[:, 0])
+
+    # Generate the UMAP plot on the ax_umap
+    sc.pl.umap(adata, color=umap_color, legend_loc="on data", ax=ax_umap, show=False)
+
+    # Ensure the UMAP plot is square
+    ax_umap.set_aspect('equal')
+    
+
+    # Set the plot title to include adata_name and umap_color
+    ax_umap.set_title(f"UMAP of {adata_name} colored by '{umap_color}'")
+
+    # Add definitions text under the UMAP plot
+    definitions_text = (
+        r"$\mathbf{Genes\ ordered\ by\ Z-score.}$""\n\n"
+        r"$\mathbf{LFC}$: Fold change for each gene for each group.""\n\n"
+    r"$\mathbf{-log10p}$: -log10 Benjamini-Hochberg corrected p-values.""\n\n"
+    r"$\mathbf{MeanExpr}$: Mean expression of the gene in the group.""\n\n"
+    r"$\mathbf{MeanExprRest}$: Mean expression of the gene in the rest of the groups""\n""(excluding current group).""\n\n"
+    r"$\mathbf{pts}$: Fraction of cells expressing the genes for each group.""\n\n"
+    r"$\mathbf{pts\_rest}$: Fraction of cells from the union of the rest of each group""\n"" expressing the genes."
+)
+    # Create an axis for the definitions text
+    ax_definitions = fig.add_subplot(gs[0, 0])
+    # Position the text under the UMAP plot
+    ax_definitions.axis('off')  # Hide the axis
+    ax_definitions.text(
+        -0.1, -0.1, definitions_text,
+        ha='left', va='top',
+        fontsize=10,
+        transform=ax_umap.transAxes,
+        bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=5)
+    )
+
+    # Prepare data for tables
+    tables_data = {}
+    for group_name in group_names:
+        top_genes = gene_names[group_name][:n_top_genes]
+        top_logfoldchanges = logfoldchanges[group_name][:n_top_genes]
+        top_pvals_adj = pvals_adj[group_name][:n_top_genes]
+        top_neg_log_pvals = -np.log10(top_pvals_adj)
+
+        # Retrieve 'pts' values for the top genes and current group
+        top_pts = pts.loc[top_genes, group_name].values
+        top_pts_rest = pts_rest.loc[top_genes, group_name].values
+
+        # Retrieve mean expression values for the top genes in the current group
+        mean_expr = mean_expr_df.loc[top_genes, group_name].values
+        mean_expr_rest = mean_expr_rest_df.loc[top_genes, group_name].values
+
+        # Store data in a list of lists
+        table = [
+            ['Gene'] + list(top_genes),
+            ['LFC'] + ["{:.2f}".format(lfc) for lfc in top_logfoldchanges],
+            ['-10logp'] + ["{:.2f}".format(pval) for pval in top_neg_log_pvals],
+            ['MeanExpr'] + ["{:.2f}".format(me) for me in mean_expr],
+            ['MeanExpr_rest'] + ["{:.2f}".format(me) for me in mean_expr_rest],
+            ['pts'] + ["{:.2f}".format(pt) for pt in top_pts],
+            ['pts_rest'] + ["{:.2f}".format(pt) for pt in top_pts_rest]            
+        ]
+
+        # Store the colors for gene names
+        gene_colors = ['black'] + ['red' if lfc > 0 else 'blue' for lfc in top_logfoldchanges]
+
+        tables_data[group_name] = (table, gene_colors)
+
+    # Now, create a table for each group, stacked vertically on the right
+    for i, group_name in enumerate(group_names):
+        table_data, gene_colors = tables_data[group_name]
+
+        # Create a new axis for the table on the right
+        ax_subtable = fig.add_subplot(gs[i, 1])
+        ax_subtable.axis('off')
+
+        # Create the table
+        the_table = ax_subtable.table(cellText=table_data,
+                                      cellLoc='center',
+                                      loc='center')
+
+        # Adjust the table properties
+        the_table.auto_set_font_size(False)
+        the_table.set_fontsize(8)
+        the_table.scale(1, 2)  # Adjust table scale if necessary
+
+        # Set cell colors and properties
+        for (row, col), cell in the_table.get_celld().items():
+            cell.set_linewidth(0.5)
+            if row == 0 and col > 0:
+                # Gene names in the top row
+                cell._text.set_color(gene_colors[col])
+                cell.set_text_props(weight='bold')
+                #truncate gene names if they are too long
+                cell._text.set_text(cell._text.get_text()[:7])
+            if col == 0 and row > 0:
+                # Labels in the first column
+                cell.set_text_props(weight='bold')
+                cell._text.width = 0.2
+            if row == 0 or col == 0:
+                cell.set_facecolor('#f1f1f1')  # Light grey background for headers
+
+        # Set the table title
+        ax_subtable.set_title(f"Cluster {group_name} vs Rest", fontsize=10, pad=25)
+
+    # Adjust layout
+    plt.tight_layout()
+    plt.subplots_adjust(hspace=1)
+    
+
+    # Display the plot
+    plt.show()
+
+def plot_umap_with_gene_list(adata, umap_color='leiden_0.5', n_top_genes=3):
+    """
+    Plots a square UMAP embedding with clusters colored by 'umap_color' and displays
+    a list of top 'n_top_genes' for each cluster in a horizontal row. Cluster names are 
+    displayed in a single row, with corresponding genes listed below each name and 
+    colored by up-regulation (red) or down-regulation (blue) based on log fold change.
+
+    Parameters:
+    - adata: AnnData object containing your single-cell data.
+    - umap_color: str, the key in adata.obs to color the UMAP plot (e.g., 'leiden_0.5').
+    - n_top_genes: int, number of top genes to display for each cluster.
+
+    This function assumes that:
+    - Differential expression analysis has been performed and the results are stored in adata.uns['rank_genes_groups'].
+    - The name of the adata object is stored in adata.uns['name'].
+    """
+    # Retrieve adata name from adata.uns['name']
+    adata_name = adata.uns.get('name', 'adata')
+
+    # Access the rank genes groups data
+    rank_genes_groups = adata.uns['rank_genes_groups']
+    gene_names = rank_genes_groups['names']  # Structured array
+    logfoldchanges = rank_genes_groups['logfoldchanges']
+
+    # Get group names from rank_genes_groups
+    group_names = gene_names.dtype.names
+
+    # Set up figure
+    fig, ax_umap = plt.subplots(figsize=(8, 8))
+
+    # Generate the UMAP plot
+    sc.pl.umap(adata, color=umap_color, legend_loc="on data", ax=ax_umap, show=False)
+    ax_umap.set_aspect('equal')
+    ax_umap.set_title(f"UMAP of {adata_name} colored by '{umap_color}'")
+
+    # Define starting position for the cluster names (horizontal row)
+    y_pos = 0.05
+    x_start = 0.1
+    x_spacing = 0.15  # Horizontal spacing between clusters
+    gene_y_spacing = 0.03  # Vertical spacing between genes
+
+    # Loop through clusters and add cluster name and gene lists below
+    for i, group_name in enumerate(group_names):
+        # Position the cluster name at the top of each column
+        x_pos = x_start + i * x_spacing
+        fig.text(x_pos, y_pos, f"Cluster {group_name}", ha='center', va='top', fontsize=10, weight='bold')
+
+        # List top genes below each cluster name
+        for j, (gene, lfc) in enumerate(zip(gene_names[group_name][:n_top_genes], logfoldchanges[group_name][:n_top_genes])):
+            color = 'red' if lfc > 0 else 'blue'
+            gene_y_pos = y_pos - (j + 1) * gene_y_spacing
+            fig.text(x_pos, gene_y_pos, gene, ha='center', va='top', fontsize=10, color=color)
+
+    # Adjust layout and show plot
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.3)  # Add space at the bottom for gene text
+    plt.show()
 
 def gene_expression_percentage(adata, gene_id, category, logfc_threshold=0.5):
     """
@@ -537,6 +813,12 @@ def plot_proportion_heatmap(df, group_col, feature_col, adata, umap_color):
 
 
 def plot_volcano(adata, group='LPS', logfc_threshold=0.3, pval_threshold=0.05, top_n=20):
+    # Get Name of data
+    data_name = adata.uns['name']
+
+    # Get reference group
+    ref_group = adata.uns['rank_genes_groups']['params']['reference']
+
     # Create a DataFrame with necessary data
     df = pd.DataFrame({
         'logfc': adata.uns['rank_genes_groups']['logfoldchanges'][group],
@@ -544,19 +826,19 @@ def plot_volcano(adata, group='LPS', logfc_threshold=0.3, pval_threshold=0.05, t
         'gene_names': adata.uns['rank_genes_groups']['names'][group]
     })
 
+    # Replace zero p-values with the smallest positive float
+    df['pvals_adj'] = df['pvals_adj'].replace(0, np.nextafter(0, 1))
+
     # Calculate -log10 adjusted p-values
     df['neg_log_pvals'] = -np.log10(df['pvals_adj'])
 
-
-
-    #Check neg_log_pvals for inf and nan values
+    # Check neg_log_pvals for inf and nan values
     neg_log_pvals = np.array(df['neg_log_pvals'])
     print(f"Number of inf values in neg_log_pvals: {np.isinf(neg_log_pvals).sum()}")
     print(f"Number of nan values in neg_log_pvals: {np.isnan(neg_log_pvals).sum()}")
 
     # Replace inf and nan values with 0
     df['neg_log_pvals'] = df['neg_log_pvals'].replace([np.inf, -np.inf], 0)
-
 
     # Assign significance categories
     df['significance'] = 'Not significant'
@@ -573,43 +855,231 @@ def plot_volcano(adata, group='LPS', logfc_threshold=0.3, pval_threshold=0.05, t
     for key, group_df in df.groupby('significance'):
         ax.scatter(group_df['logfc'], group_df['neg_log_pvals'], s=3, color=colors[key], label=key, alpha=0.7)
 
+    # Collect text annotations
+    down_texts = []
+    up_texts = []
+
     # Annotate top N up-regulated genes
     up_genes = df[df['significance'] == 'Up-regulated']
     top_up_genes = up_genes.nsmallest(top_n, 'pvals_adj')
 
     for _, row in top_up_genes.iterrows():
-        ax.text(row['logfc'], row['neg_log_pvals'], row['gene_names'], fontsize=8)
+        up_texts.append(
+            ax.text(row['logfc'], row['neg_log_pvals'], row['gene_names'], fontsize=12)
+        )
 
     # Annotate top N down-regulated genes
     down_genes = df[df['significance'] == 'Down-regulated']
     top_down_genes = down_genes.nsmallest(top_n, 'pvals_adj')
 
     for _, row in top_down_genes.iterrows():
-        ax.text(row['logfc'], row['neg_log_pvals'], row['gene_names'], fontsize=8)
+        down_texts.append(
+            ax.text(row['logfc'], row['neg_log_pvals'], row['gene_names'], fontsize=12)
+        )
+
+
 
     # Create a dictionary of top N up- and down-regulated genes
     annotated_genes = {
         'Up-regulated': top_up_genes['gene_names'].tolist(),
         'Down-regulated': top_down_genes['gene_names'].tolist()
     }
-
-
     # Add threshold lines
-    ax.axvline(-logfc_threshold, color="grey", linestyle="--")
-    ax.axvline(logfc_threshold, color="grey", linestyle="--")
-    ax.axhline(-np.log10(pval_threshold), color="grey", linestyle="--")
+    neg_vline = ax.axvline(-logfc_threshold, color="grey", linestyle="--")
+    pos_vline = ax.axvline(logfc_threshold, color="grey", linestyle="--")
+    hline = ax.axhline(-np.log10(pval_threshold), color="grey", linestyle="--")
+
+
 
     # Set labels and title
     ax.set_xlabel("Log Fold Change (logFC)")
     ax.set_ylabel("-Log10 Adjusted P-Value (-logFDR)")
-    ax.set_xlim(-10, 10)
+    ax.set_xlim(-5, 5)
     ax.set_ylim(0, df['neg_log_pvals'].max() + 1)
     ax.legend()
-    ax.set_title(f"Volcano Plot for {group}")
+    title_obj = ax.set_title(f"Volcano Plot for {group} vs {ref_group} in {data_name}")
+
+    mpl_objs = [neg_vline, pos_vline, hline, title_obj]
+
+    adjust_text(
+        up_texts,
+        ax=ax,
+        objects=mpl_objs,
+        ensure_inside_axes=True,
+        explode_radius=6,
+        pull_threshold=3,
+        force_text=[5, 5],
+        force_static=[2, 1],
+        force_pull=[0.1, 0.1],
+        only_move={'static': 'x+', 'text': 'x+'},
+        arrowprops=dict(arrowstyle='->', color='black', shrinkA=8),
+        max_move=25,
+        min_arrow_len=1,
+        expand_axes=True
+    )
+
+    adjust_text(
+        down_texts,
+        ax=ax,
+        objects=mpl_objs,
+        ensure_inside_axes=True,
+        explode_radius=6,
+        pull_threshold=3,
+        force_text=[5, 5],
+        force_static=[2, 1],
+        force_pull=[0.1, 0.1],
+        only_move={'static': 'x-', 'text': 'x-'},
+        arrowprops=dict(arrowstyle='->', color='black', shrinkA=8),
+        max_move=25,
+        min_arrow_len=1,
+        expand_axes=True
+    )
+    # Improve layout
+    plt.subplots_adjust(top=0.85)
+    plt.tight_layout()
+    plt.show()
+
+    return annotated_genes
+
+def plot_volcano_from_df(
+    df,
+    logfc_col='log2FoldChange',
+    pval_col='padj',
+    gene_col=None,
+    logfc_threshold=0.3,
+    pval_threshold=0.05,
+    top_n=20,
+    title='Volcano Plot',
+    figsize=(10, 7)
+):
+    """
+    Plots a volcano plot from a DataFrame containing differential expression results.
+
+    Parameters:
+    - df: pandas DataFrame containing the differential expression results.
+    - logfc_col: str, name of the column containing log2 fold changes.
+    - pval_col: str, name of the column containing adjusted p-values.
+    - gene_col: str or None, name of the column containing gene names. If None, the DataFrame's index is used.
+    - logfc_threshold: float, threshold for log2 fold change to consider as significant.
+    - pval_threshold: float, threshold for adjusted p-value to consider as significant.
+    - top_n: int, number of top genes to annotate for upregulated and downregulated genes.
+    - title: str, title of the plot.
+    - figsize: tuple, size of the figure.
+    """
+    # Create a copy of the DataFrame to avoid modifying the original
+    df = df.copy()
+
+    # If gene_col is specified, use it; otherwise, use the index as gene names
+    if gene_col:
+        df['gene_names'] = df[gene_col]
+    else:
+        df['gene_names'] = df.index
+
+    # Replace zero or negative p-values with the smallest positive float
+    df[pval_col] = df[pval_col].replace(0, np.nextafter(0, 1e-10))
+
+    # Calculate -log10 adjusted p-values
+    df['neg_log_pvals'] = -np.log10(df[pval_col])
+
+    # Check for infinite or NaN values
+    neg_log_pvals = np.array(df['neg_log_pvals'])
+    num_inf = np.isinf(neg_log_pvals).sum()
+    num_nan = np.isnan(neg_log_pvals).sum()
+    print(f"Number of inf values in neg_log_pvals: {num_inf}")
+    print(f"Number of nan values in neg_log_pvals: {num_nan}")
+
+    # Replace inf and NaN values with zero
+    df['neg_log_pvals'] = df['neg_log_pvals'].replace([np.inf, -np.inf], 0)
+    df['neg_log_pvals'] = df['neg_log_pvals'].fillna(0)
+
+    # Assign significance categories
+    df['significance'] = 'Not significant'
+    df.loc[
+        (df[logfc_col] >= logfc_threshold) & (df[pval_col] <= pval_threshold),
+        'significance'
+    ] = 'Up-regulated'
+    df.loc[
+        (df[logfc_col] <= -logfc_threshold) & (df[pval_col] <= pval_threshold),
+        'significance'
+    ] = 'Down-regulated'
+
+    # Define color mapping
+    colors = {'Not significant': 'grey', 'Up-regulated': 'red', 'Down-regulated': 'blue'}
+
+    # Create the plot
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # Plot each category
+    for key, group_df in df.groupby('significance'):
+        ax.scatter(
+            group_df[logfc_col],
+            group_df['neg_log_pvals'],
+            s=10,
+            color=colors[key],
+            label=key,
+            alpha=0.7
+        )
+
+    # Collect text annotations
+    up_texts = []
+    down_texts = []
+
+    # Annotate top N upregulated genes
+    up_genes = df[df['significance'] == 'Up-regulated']
+    top_up_genes = up_genes.nsmallest(top_n, pval_col)
+
+    for _, row in top_up_genes.iterrows():
+        up_texts.append(
+            ax.text(row[logfc_col], row['neg_log_pvals'], row['gene_names'], fontsize=12)
+        )
+
+    # Annotate top N downregulated genes
+    down_genes = df[df['significance'] == 'Down-regulated']
+    top_down_genes = down_genes.nsmallest(top_n, pval_col)
+
+    for _, row in top_down_genes.iterrows():
+        down_texts.append(
+            ax.text(row[logfc_col], row['neg_log_pvals'], row['gene_names'], fontsize=12)
+        )
+
+    # Add threshold lines
+    neg_vline = ax.axvline(-logfc_threshold, color="grey", linestyle="--")
+    pos_vline = ax.axvline(logfc_threshold, color="grey", linestyle="--")
+    hline = ax.axhline(-np.log10(pval_threshold), color="grey", linestyle="--")
+
+    # Set labels and title
+    ax.set_xlabel("Log2 Fold Change (log2FC)")
+    ax.set_ylabel("-Log10 Adjusted P-Value (-log10 padj)")
+    ax.set_xlim(df[logfc_col].min() - 1, df[logfc_col].max() + 1)
+    ax.set_ylim(0, df['neg_log_pvals'].max() + 1)
+    ax.legend()
+    title_obj = ax.set_title(title)
+
+    mpl_objs = [neg_vline, pos_vline, hline, title_obj]
+
+    # Adjust text annotations to prevent overlap
+    adjust_text(
+        up_texts + down_texts,
+        ax=ax,
+        objects=mpl_objs,
+        arrowprops=dict(arrowstyle='->', color='black', lw=0.5),
+        expand_text=(1.2, 1.2),
+        expand_points=(1.2, 1.2),
+        expand_objects=(1.2, 1.2),
+        force_text=(0.5, 0.5),
+        force_points=(0.2, 0.2),
+        lim=1000,
+    )
 
     # Improve layout
     plt.tight_layout()
     plt.show()
+
+    # Create a dictionary of top N up- and down-regulated genes
+    annotated_genes = {
+        'Up-regulated': top_up_genes['gene_names'].tolist(),
+        'Down-regulated': top_down_genes['gene_names'].tolist()
+    }
 
     return annotated_genes
 
