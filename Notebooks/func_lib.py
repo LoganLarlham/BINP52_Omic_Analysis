@@ -1,6 +1,7 @@
 # This file contains the functions to be used in the notebooks for the project
 
 import scanpy as sc
+import scanpy.external as sce
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -225,63 +226,92 @@ def visualize_QC_measures(adata, title="QC Measures"):
         plt.show()
 
 
-def hash_demulitplex(adata, hashtag_prefix='Hashtag', number_of_noise_barcodes=None):
+def hash_demulitplex(adata, hashtag_input, number_of_noise_barcodes=None):
     """
     Function to demultiplex droplets using the Hashsolo package.
-    
-    Parameters:
-    adata (AnnData): The input AnnData object.
-    hashtag_prefix (str): The prefix for hashtag genes in the var gene_ids.
-    
-    Returns:
-    AnnData: The updated AnnData object with demultiplexing results.
-    """
-    
-    from solo import hashsolo
 
-    # Check if hashtag genes are present
-    hashtag_genes = adata.var.gene_ids.str.startswith(hashtag_prefix)
-    if sum(hashtag_genes) == 0:
-        print(f"No genes with prefix '{hashtag_prefix}' found.")
+    Parameters
+    ----------
+    adata : AnnData
+        The input AnnData object.
+    hashtag_input : str or list-like
+        - If a str, interpret it as a prefix for hashtag genes in `var['gene_ids']`.
+        - If a list or Index, interpret it as explicit gene_ids/var_names to use.
+    number_of_noise_barcodes : int, optional
+        Number of noise barcodes to pass to `hashsolo`.
+
+    Returns
+    -------
+    AnnData
+        The updated AnnData object with demultiplexing results.
+    """
+    import numpy as np
+    import scanpy.external as sce
+
+    # 1. Figure out if `hashtag_input` is a prefix (string) or list of genes.
+    if isinstance(hashtag_input, str):
+        # We assume it's a prefix in the 'gene_ids' column.
+        hashtag_mask = adata.var['gene_ids'].str.startswith(hashtag_input)
+    else:
+        # Otherwise, assume it's a list/Index of actual gene names or gene_ids.
+        # We can check both var.index (the var_names) and var['gene_ids']
+        # in case your data is keyed either way:
+        if hasattr(hashtag_input, "__iter__"):
+            # Convert to a set for faster membership checking
+            hashtag_input_set = set(hashtag_input)
+            # Create a mask that is True if var.index OR var['gene_ids'] is in the set
+            hashtag_mask = adata.var_names.isin(hashtag_input_set) | adata.var['gene_ids'].isin(hashtag_input_set)
+        else:
+            raise TypeError(
+                "hashtag_input must be either a string prefix or a list of explicit gene names."
+            )
+    
+    # 2. Check if we found any genes
+    if hashtag_mask.sum() == 0:
+        print(f"No matching hashtag genes found for input: {hashtag_input}")
         return adata
 
-    # Extract hashtag data
-    hto = adata[:, hashtag_genes].copy()
+    # 3. Subset adata to those hashtag columns
+    hto = adata[:, hashtag_mask].copy()
 
-    # Transfer counts from hto.X to hto.obs
+    # 4. Transfer counts from hto.X to hto.obs (one column per hashtag)
+    # NOTE: For large data, consider using a sparse-friendly approach
     hto.obs[hto.var_names] = hto.X.toarray()
-    
-    # Run HashSolo
-    if number_of_noise_barcodes is not None:
-        hashsolo.hashsolo(hto, number_of_noise_barcodes=number_of_noise_barcodes)
-    else:
-        hashsolo.hashsolo(hto)
 
-    # Print the number of predicted singlets, doublets, and negatives
-    singlets = sum(hto.obs['most_likely_hypothesis'] == 1)
-    doublets = sum(hto.obs['most_likely_hypothesis'] == 2)
-    negatives = sum(hto.obs['most_likely_hypothesis'] == 0)
+    # 5. Run HashSolo
+    if number_of_noise_barcodes is not None:
+        sce.pp.hashsolo(hto, hashtag_input, number_of_noise_barcodes=number_of_noise_barcodes)
+    else:
+        sce.pp.hashsolo(hto, hashtag_input)
+
+    # 6. Print summary stats
+    singlets = (hto.obs['most_likely_hypothesis'] == 1).sum()
+    doublets = (hto.obs['most_likely_hypothesis'] == 2).sum()
+    negatives = (hto.obs['most_likely_hypothesis'] == 0).sum()
     print(f'Number of predicted singlets: {singlets}')
     print(f'Number of predicted doublets: {doublets}')
     print(f'Number of predicted negatives: {negatives}')
-    
-    # Print the number of cells classified to each hashtag
+
     classifications = hto.obs['Classification'].value_counts()
     print('Number of cells for each hashtag:')
     for classification, count in classifications.items():
         print(f'{classification}: {count}')
-    
-    # Map classifications back to original AnnData object
-    adata.obs['Classification'] = hto.obs['Classification'].map(lambda x: adata.var.index[adata.var['gene_ids'] == x][0] if x in adata.var['gene_ids'].values else x)
 
-    # Update the original AnnData object with the most likely hypothesis and classification
+    # 7. Map classifications back to original AnnData object
+    #    Note: This mapping may need adjusting if your classification labels
+    #    are different from what is in var['gene_ids'] or var_names.
+    def map_to_var_index(label):
+        # If the label is directly in adata.var['gene_ids'], get the var index (like 'K257')
+        if label in adata.var['gene_ids'].values:
+            return adata.var.index[adata.var['gene_ids'] == label][0]
+        else:
+            # Return the label as-is if not found
+            return label
+
+    adata.obs['Classification'] = hto.obs['Classification'].map(map_to_var_index)
     adata.obs['most_likely_hypothesis'] = hto.obs['most_likely_hypothesis']
-    
-    return adata
 
-# Example usage:
-# adata = sc.read_h5ad('path_to_your_anndata.h5ad')
-# adata = demultiplex_droplets(adata)
+    return adata
 
 
 def plot_total_counts_vs_cells(
