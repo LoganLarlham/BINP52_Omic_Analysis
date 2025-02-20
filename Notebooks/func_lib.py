@@ -627,7 +627,7 @@ def plot_umap_with_top_genes(adata, umap_color=None, n_top_genes=3):
     # Display the plot
     plt.show()
 
-def plot_umap_with_gene_list(adata, umap_color='leiden_0.5', n_top_genes=3):
+def plot_umap_with_gene_list(adata, umap_color, n_top_genes=3):
     """
     Plots a square UMAP embedding with clusters colored by 'umap_color' and displays
     a list of top 'n_top_genes' for each cluster in a horizontal row. Cluster names are 
@@ -645,6 +645,12 @@ def plot_umap_with_gene_list(adata, umap_color='leiden_0.5', n_top_genes=3):
     """
     # Retrieve adata name from adata.uns['name']
     adata_name = adata.uns.get('name', 'adata')
+
+    # Ensure using log_norm prior to running rank_genes_groups
+    adata.X = adata.layers['log_norm'] if 'log_norm' in adata.layers.keys() else print("No log_norm layer found in adata.layers")
+
+    # Run rank_genes with umap_color parameter as groupby to ensure correct gene ranking if previous run with different groupby
+    sc.tl.rank_genes_groups(adata, groupby=umap_color, method='wilcoxon', rankby_abs = True)
 
     # Access the rank genes groups data
     rank_genes_groups = adata.uns['rank_genes_groups']
