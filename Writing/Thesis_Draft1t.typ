@@ -67,7 +67,18 @@
     - Mention of newer understanding of AD in which microglia play a central role (De strooper?)
 - One paragraph on APOE
     - Mention of APOE as the strongest genetic risk factor for AD
-    - Discuss previous roles of APOE 
+    - discuss basic facts, lipid transport, isoforms, history of discovery
+    - discuss studies that have shown APOE effect in AD, Astrocytes and microglial; Lee et al., Balu et al.
+- One paragraph on microglia
+    - One to two sentences on microglia basic function 
+    - One sentence of previous understanding of micrglial activation
+    - Discuss newer understanding of microglial heterogeneity and activation states that has been revealed by scRNAseq, focus on Keren-Shaul et al. 2017 and Krassemen et al. 2017 first. 
+    - Mention of the importance of understanding microglial heterogeneity in AD
+    - Discuss other studies that have also identified DAM/MgND. Olah et. al., Tuddenheim et. al., Wang et. al., Hammond et. al., Millet et. al. 
+    - Sentences about non-DAM microglia subtypes (Wang & Millet)
+    - Try to focus on genes that are implicated in the identified subtypes.
+
+
 
 #lorem(50)
 
