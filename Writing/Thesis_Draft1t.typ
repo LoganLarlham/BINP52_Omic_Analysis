@@ -63,41 +63,35 @@
 
 - One Paragraph on AD
     - low level information of AD
+    - Talk about main hallmarks of AD, amyloid plaques, neurofibrillary tangles, neuroinflammation
     - Mention of previous understanding of AD 
     - Mention of newer understanding of AD in which microglia play a central role (De strooper?)
 - One paragraph on APOE
     - Mention of APOE as the strongest genetic risk factor for AD
     - discuss basic facts, lipid transport, isoforms, history of discovery
     - discuss studies that have shown APOE effect in AD, Astrocytes and microglial; Lee et al., Balu et al.
+- Short paragraph intorudcing 5xFADE3/4 model (amyloid model with human APOE)
 - One paragraph on microglia
     - One to two sentences on microglia basic function 
     - One sentence of previous understanding of micrglial activation
-    - Discuss newer understanding of microglial heterogeneity and activation states that has been revealed by scRNAseq, focus on Keren-Shaul et al. 2017 and Krassemen et al. 2017 first. 
+    - Discuss newer understanding of microglial heterogeneity and activation states that has been revealed by scRNAseq, focus on Keren-Shaul et al. 2017 and Krassemen et al. 2017 first. Discuss role of 
+    - Mention evidence for general aging microglial heterogeneity (Hajdarovic et al. 2022)
     - Mention of the importance of understanding microglial heterogeneity in AD
-    - Discuss other studies that have also identified DAM/MgND. Olah et. al., Tuddenheim et. al., Wang et. al., Hammond et. al., Millet et. al. 
-    - Sentences about non-DAM microglia subtypes (Wang & Millet)
+    - Discuss other studies that have also identified DAM/MgND. Olah et. al., Tuddenheim et. al., Wang et. al., Hammond et. al., Millet et. al., Mancuso et. al.
+    - Sentences about non-DAM microglia subtypes (Wang & Millet & Mancuso)
+      - Particular attentiion to Interferon, MHCII,Cytokine/Chemokine expressing microglia
     - Try to focus on genes that are implicated in the identified subtypes.
-
-
-
-#lorem(50)
-
-#lorem(40)
-
-#lorem(100)
-
-#lorem(50)
+    - Describe difficulty in validating microglial expression profiles due to differences in human/mouse microglia, autopsy/surgery techniques(olah, Marsh. et al.), mouse amyloid model, age of mice/humans. 
+- SHort Paragraph about LPS activation 
+    - LPS activation of microglia as a model for neuroinflammation
+    - Mention Unpublished data from lab that early life inflammation can lead to long term changes in microglia
+    - This study aims to this early life inflammation model to study the effects of APOE genotype on the microglial response to AD (amyloid) pathology.
 
 
 
 = Materials and methods <materials-and-methods>
 == Animals  <animals>
-
-#lorem(80)
-
-== Experimental procedure and sample processing <experimental-procedure>
-
-#lorem(50)
+- Describe the mouse model, number of samples, number per Group, animal care details
 
 #figure(
   caption:[Summary of Genotype Treatment Combinations \ #text(weight:"regular")[]],
@@ -128,15 +122,21 @@ table(
 ))
 
 
+== Experimental procedure and sample processing <experimental-procedure>
+- Describe LPS injection
+- Describe Tissue collection (brain dissection)
+- Describe tissue processing, i.e. method of dissociation, microglial isolation
+- Mention FACS sorting
 == Cell Sequencing <cell-sequencing>
-#lorem(40)
+- single cell RNA sequencing
+- Mention of 10x genomics platform and chemistry used
+- Mention of sequencing depth/ quality metrics of raw data
+- Mention of Cell Ranger pipeline/ Alignment to mm10
+
 
 
 == Quality Control, Normalization, and Data Correction <qc-normalization-dc>
-#lorem(30)
-
-#lorem(30)
-
+- 
 
 
 #figure(
