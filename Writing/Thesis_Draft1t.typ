@@ -132,7 +132,7 @@ table(
 - Mention of 10x genomics platform and chemistry used
 - Mention of sequencing depth/ quality metrics of raw data
 - Mention of Cell Ranger pipeline/ Alignment to mm10
-
+- Hashing/HTO of samples and use of Hashsolo to demultiplex
 
 
 == Quality Control, Normalization, and Data Correction <qc-normalization-dc>

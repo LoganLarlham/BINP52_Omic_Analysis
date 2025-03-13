@@ -8,6 +8,10 @@ import numpy as np
 import anndata as ad
 import pandas as pd
 import scipy.sparse
+import statsmodels.formula.api as smf
+import statsmodels.api as sm
+from scipy.stats import ttest_ind
+from statsmodels.stats.multitest import multipletests
 from adjustText import adjust_text
 from matplotlib_venn import venn2
 from typing import List, Optional, Union
@@ -1166,6 +1170,151 @@ def venn_gene(adata1, adata2, group, logfc_threshold=0.3, pval_threshold=0.05, t
     venn2([set(down_genes1), set(down_genes2)], set_labels=[adata1, adata2])
     plt.title("Down-regulated Genes")
     plt.show()
+    
+
+def plot_dual_contrast(adata, gene, constant_contrast, contrast_variable, level1, level2):
+    """
+    Plot a bar plot comparing two contrast groups (e.g. treatment: VEHICLE vs LPS)
+    while holding other experimental conditions constant (e.g. disease and apoe).
+
+    For each contrast group:
+      - Cells are filtered by the constant conditions and the contrast variable is set 
+        to the specified level.
+      - The function groups cells by 'Classification' (i.e. sample) and computes the 
+        mean normalized count for the gene of interest.
+      - A bar is drawn with height equal to the overall mean (across samples), with 
+        individual sample means overlaid as dots.
+    
+    In addition, the function performs a two-sample t-test on the aggregated sample-level 
+    means (comparing the two contrast groups). The p-value is BH-corrected, and both the 
+    corrected p-value and significance stars are printed and annotated on the plot.
+    
+    Parameters:
+    -----------
+    adata : AnnData
+        The AnnData object with expression data and observations.
+    gene : str
+        The gene of interest.
+    constant_contrast : dict
+        Dictionary of conditions that remain constant (e.g. {'disease': 'E4', 'apoe': 'WT'}).
+    contrast_variable : str
+        The variable being contrasted (e.g. 'treatment').
+    level1 : str
+        First level for the contrast variable (e.g. 'VEHICLE').
+    level2 : str
+        Second level for the contrast variable (e.g. 'LPS').
+    
+    Returns:
+    --------
+    None
+        Displays the annotated bar plot.
+    """
+    
+    def get_sample_means(adata_subset, gene):
+        # Use log-normalized counts (assumed in adata.layers['log_norm'])
+        adata_subset.X = adata_subset.layers['log_norm'].copy()
+        
+        if gene not in adata_subset.var_names:
+            raise ValueError(f"Gene '{gene}' not found in adata.var_names.")
+        
+        # Extract gene expression values as a 1D array
+        gene_expr = adata_subset[:, gene].X
+        if hasattr(gene_expr, "toarray"):
+            gene_expr = gene_expr.toarray().flatten()
+        else:
+            gene_expr = np.array(gene_expr).flatten()
+        
+        # Create DataFrame with expression and sample identity (Classification)
+        df = pd.DataFrame({
+            'normalized_counts': gene_expr,
+            'Classification': adata_subset.obs['Classification'].values
+        })
+        # Compute mean expression per sample
+        sample_means = df.groupby('Classification')['normalized_counts'].mean()
+        return sample_means
+
+    def subset_for_level(level):
+        mask = np.ones(adata.n_obs, dtype=bool)
+        for key, value in constant_contrast.items():
+            mask &= (adata.obs[key] == value)
+        mask &= (adata.obs[contrast_variable] == level)
+        return adata[mask].copy()
+    
+    # Subset the data for the two contrast levels
+    adata_level1 = subset_for_level(level1)
+    adata_level2 = subset_for_level(level2)
+    
+    # Compute sample-level means
+    sample_means1 = get_sample_means(adata_level1, gene)
+    sample_means2 = get_sample_means(adata_level2, gene)
+    
+    # Compute overall means for plotting
+    overall_mean1 = sample_means1.mean() if not sample_means1.empty else np.nan
+    overall_mean2 = sample_means2.mean() if not sample_means2.empty else np.nan
+    
+    # Prepare bar plot
+    fig, ax = plt.subplots(figsize=(8, 6))
+    conditions = [level1, level2]
+    overall_means = [overall_mean1, overall_mean2]
+    bar_positions = np.arange(len(conditions))
+    
+    bars = ax.bar(bar_positions, overall_means, color=['lightblue', 'lightgreen'],
+                  alpha=0.6, width=0.6, label='Overall Mean Expression')
+    
+    # Overlay individual sample means as dots with jitter for clarity
+    jitter_std = 0.08
+    for i, sample_means in enumerate([sample_means1, sample_means2]):
+        if not sample_means.empty:
+            x_positions = np.random.normal(loc=i, scale=jitter_std, size=len(sample_means))
+            ax.scatter(x_positions, sample_means.values, color='black', alpha=0.8,
+                       zorder=10, label='Sample Expression' if i == 0 else "")
+    
+    # ----------------- Two-sample t-test on Sample-Level Means -----------------
+    # Check if both groups have at least two samples
+    n1 = sample_means1.shape[0]
+    n2 = sample_means2.shape[0]
+    if n1 < 2 or n2 < 2:
+        print("Not enough samples in one or both groups to perform a reliable t-test.")
+        p_corrected = np.nan
+    else:
+        # Perform two-sample t-test (unequal variance)
+        t_stat, p_val = ttest_ind(sample_means1.values, sample_means2.values, equal_var=False)
+        # Apply BH correction (trivial here with one test)
+        reject, p_adj, _, _ = multipletests([p_val], method='fdr_bh')
+        p_corrected = p_adj[0]
+    
+    # Determine significance stars based on corrected p-value
+    if not np.isnan(p_corrected):
+        if p_corrected < 0.001:
+            significance = '***'
+        elif p_corrected < 0.01:
+            significance = '**'
+        elif p_corrected < 0.05:
+            significance = '*'
+        else:
+            significance = 'ns'
+    else:
+        significance = 'NA'
+    
+    # Print the p-value and significance
+    print(f"BH-corrected p-value for {contrast_variable}: {p_corrected:.3g} {significance}")
+    
+    # Annotate the plot with both the p-value and significance stars
+    x_center = np.mean(bar_positions)
+    y_max = max(overall_means) * 1.1
+    annotation = f"{significance}\np = {p_corrected:.3g}"
+    ax.text(x_center, y_max, annotation, ha='center', va='bottom', fontsize=14)
+    ax.set_ylim(0, y_max * 1.2)
+    
+    ax.set_xlabel("Contrast Group")
+    ax.set_ylabel(f"Normalized counts for {gene}")
+    ax.set_title(f"Expression of {gene}\nConstant: {constant_contrast}, Contrast: {contrast_variable}")
+    ax.set_xticks(bar_positions)
+    ax.set_xticklabels(conditions)
+    ax.legend()
+    plt.tight_layout()
+    plt.show()
+
 
 # def plot_volcano2(
 #     adata,
