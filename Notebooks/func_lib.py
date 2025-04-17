@@ -1196,7 +1196,7 @@ def plot_dual_contrast(adata, gene, constant_contrast, contrast_variable, level1
     gene : str
         The gene of interest.
     constant_contrast : dict
-        Dictionary of conditions that remain constant (e.g. {'disease': 'E4', 'apoe': 'WT'}).
+        Dictionary of conditions that remain constant (e.g. {'apoe': 'E4', 'diesase': 'WT'}).
     contrast_variable : str
         The variable being contrasted (e.g. 'treatment').
     level1 : str
@@ -1315,6 +1315,235 @@ def plot_dual_contrast(adata, gene, constant_contrast, contrast_variable, level1
     plt.tight_layout()
     plt.show()
 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def plot_quad_contrast(adata, gene, disease, dc_vehlps_results):
+    """
+    Plot a bar plot comparing gene expression under four contrast groups:
+      - Two APOE conditions (E3 and E4) and two treatment levels (VEHICLE and LPS),
+        while holding disease state constant (e.g. 'WT' or 'FAD').
+      
+      For each group:
+        - Cells are filtered by APOE, treatment, and the constant disease state.
+        - Cells are grouped by 'Classification' (i.e. sample) and the mean normalized count 
+          for the gene (assumed to be stored in adata.layers['log_norm']) is computed.
+        - A bar is drawn with height equal to the overall mean (across samples) and individual
+          sample means are overlaid as jittered diamond markers.
+      
+      The function uses a custom color palette for each group.
+      
+      Parameters:
+      -----------
+      adata : AnnData
+          The AnnData object with expression data and observations.
+      gene : str
+          The gene of interest.
+      disease : str
+          The disease state (e.g. 'WT' or 'FAD') to hold constant.
+      dc_vehlps_results : dict
+          A dictionary of DESeq2 results with keys of the form f"{apoe}{disease}_vehlps".
+      
+      Returns:
+      --------
+      None
+          Displays the annotated bar plot.
+    """
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    # Define color palettes for E3 and E4.
+    e3_wt_palette = sns.color_palette("Blues", 2)    # two shades for WT in E3
+    e3_fad_palette = sns.color_palette("Greens", 2)   # two shades for FAD in E3
+    e4_wt_palette = sns.color_palette("Oranges", 2)   # two shades for WT in E4
+    e4_fad_palette = sns.color_palette("Purples", 2)   # two shades for FAD in E4
+
+
+    if disease == 'WT':
+        e3_palette = e3_wt_palette
+        e4_palette = e4_wt_palette
+    elif disease == 'FAD':
+        e3_palette = e3_fad_palette
+        e4_palette = e4_fad_palette
+
+    # For this function, we assume the desired groups are:
+    # E3_{disease}_VEHICLE, E3_{disease}_LPS, E4_{disease}_VEHICLE, E4_{disease}_LPS
+    desired_order = [
+        f"E3_{disease}_VEHICLE",
+        f"E3_{disease}_LPS",
+        f"E4_{disease}_VEHICLE",
+        f"E4_{disease}_LPS"
+    ]
+    
+
+
+    # Map groups to colors using the appropriate palette.
+    # (Here, we assume for simplicity that E3 uses the WT palette and E4 uses the WT palette.
+    # Adjust if you want to incorporate FAD as a separate color family.)
+    color_dict = {
+        f"E3_{disease}_VEHICLE": e3_palette[0],
+        f"E3_{disease}_LPS": e3_palette[1],
+        f"E4_{disease}_VEHICLE": e4_palette[0],
+        f"E4_{disease}_LPS": e4_palette[1],
+    }
+    
+    # For positioning, we place the E3 groups close together and the E4 groups with a gap.
+    positions = {
+        f"E3_{disease}_VEHICLE": 0,
+        f"E3_{disease}_LPS": 1,
+        f"E4_{disease}_VEHICLE": 3,
+        f"E4_{disease}_LPS": 4,
+    }
+# Define a helper to subset adata for a given APOE and treatment, keeping disease constant.
+    def subset_for_conditions(apoe, treatment, disease):
+        mask = (
+            (adata.obs['apoe'] == apoe) &
+            (adata.obs['treatment'] == treatment) &
+            (adata.obs['disease'] == disease)
+        )
+        return adata[mask].copy()
+    
+    # Helper function to compute sample means for a given subset.
+    def get_sample_means(adata_subset, gene):
+        # Use log-normalized counts (assumed stored in adata.layers['log_norm'])
+        adata_subset.X = adata_subset.layers['log_norm'].copy()
+        if gene not in adata_subset.var_names:
+            raise ValueError(f"Gene '{gene}' not found in adata.var_names.")
+        gene_expr = adata_subset[:, gene].X
+        if hasattr(gene_expr, "toarray"):
+            gene_expr = gene_expr.toarray().flatten()
+        else:
+            gene_expr = np.array(gene_expr).flatten()
+        # Create a DataFrame with expression and sample identity (Classification)
+        df = pd.DataFrame({
+            'normalized_counts': gene_expr,
+            'Classification': adata_subset.obs['Classification'].values
+        })
+        # Compute mean expression per sample
+        sample_means = df.groupby('Classification')['normalized_counts'].mean()
+        return sample_means
+
+    # Define the two APOE values and treatment levels.
+    apoes = ['E3', 'E4']
+    treatments = ['VEHICLE', 'LPS']
+
+    overall_means = []         # To store the overall mean for each group.
+    overall_stds = []          # To store the standard deviation.
+    all_sample_data = []       # To store individual sample means with group labels.
+    
+    # Loop over the groups in desired order.
+    for group in desired_order:
+        # Parse group label (expected format: "E3_{disease}_VEHICLE")
+        parts = group.split("_")
+        apoe = parts[0]
+        treatment = parts[2]
+        # Subset data and compute sample means.
+        adata_subset = subset_for_conditions(apoe, treatment, disease)
+        sample_means = get_sample_means(adata_subset, gene)
+        mean_val = sample_means.mean() if not sample_means.empty else np.nan
+        std_val = sample_means.std() if not sample_means.empty else np.nan
+        overall_means.append(mean_val)
+        overall_stds.append(std_val)
+        # Record individual sample means.
+        for val in sample_means.values:
+            all_sample_data.append({'group': group, 'percent': val})
+    
+    # Create DataFrames for group statistics and individual sample data.
+    group_stats = pd.DataFrame({
+        'group': desired_order,
+        'x': [positions[g] for g in desired_order],
+        'mean': overall_means,
+        'std': overall_stds
+    })
+    df_long = pd.DataFrame(all_sample_data)
+    
+    # --- Plotting using matplotlib's bar plot style ---
+    plt.figure(figsize=(8, 4))
+    ax = plt.gca()
+    bar_width = 0.35
+
+    # Plot the bars with error bars.
+    ax.bar(
+        group_stats['x'],
+        group_stats['mean'],
+        yerr=group_stats['std'],
+        width=bar_width,
+        color=[color_dict[g] for g in desired_order],
+        capsize=5,
+        edgecolor='black'
+    )
+
+    # Overlay individual sample points as diamonds with slight x jitter.
+    for g in desired_order:
+        subset = df_long[df_long['group'] == g]
+        x_pos = positions[g]
+        jitter = np.random.uniform(-0.05, 0.05, size=len(subset))
+        ax.plot(
+            x_pos + jitter,
+            subset['percent'],
+            'D',
+            markersize=7,
+            markeredgecolor='black',
+            markerfacecolor=color_dict[g],
+            linestyle='none'
+        )
+
+    # Set custom x-axis ticks and labels.
+    ax.set_xticks([positions[g] for g in desired_order])
+    ax.set_xticklabels([g.replace("_", "-") for g in desired_order], rotation=45)
+    
+    ax.set_xlabel("Group (apoe-disease-treatment)")
+    ax.set_ylabel(f"Mean Log-Normalized expression for {gene}")
+    ax.set_title(f"Expression of {gene}\nDisease: {disease}")
+    
+    # --- Annotate with p-values and significance stars ---
+    def get_significance(pval):
+        if np.isnan(pval):
+            return 'NA'
+        if pval < 0.001:
+            return '***'
+        elif pval < 0.01:
+            return '**'
+        elif pval < 0.05:
+            return '*'
+        else:
+            return 'ns'
+
+    # Compute annotations for each APOE contrast.
+    annotations = {}
+    for apoe in apoes:
+        key = f"{apoe}{disease}_vehlps"  # expected key format: e.g. "E3WT_vehlps"
+        if key in dc_vehlps_results and gene in dc_vehlps_results[key].index:
+            p_val = dc_vehlps_results[key].loc[gene, 'padj']
+        else:
+            p_val = np.nan
+        sig = get_significance(p_val)
+        # Group center is the mean of the two positions for that APOE.
+        group_positions = [positions[f"{apoe}_{disease}_{t}"] for t in treatments]
+        group_center = np.mean(group_positions)
+        annotations[apoe] = (group_center, p_val, sig)
+
+    # Determine a y-value for annotation (a little above the highest bar).
+    valid_means = [m for m in overall_means if not np.isnan(m)]
+    y_max = max(valid_means) * 1.1 if valid_means else 1
+
+    # Only annotate if the p-value is neither 1 nor N/A.
+    for apoe in apoes:
+        group_center, p_val, sig = annotations[apoe]
+        if np.isnan(p_val) or p_val == 1:
+            continue  # Do not show annotation if p-val is N/A or 1
+        annotation_text = f"{sig}\np = {p_val:.3g}"
+        ax.text(group_center, y_max, annotation_text, ha='center', va='bottom', fontsize=14)
+
+    ax.set_ylim(0, y_max * 1.5)
+
+    
+    plt.tight_layout()
+
+    return plt.gcf()
 
 # def plot_volcano2(
 #     adata,
