@@ -141,6 +141,8 @@ APOE3 is considered to be the "neutral" allele, while APOE2 is protective and AP
   
 #note()[- Short paragraph intorudcing 5xFADE3/4 model (amyloid model with human APOE), mention mouse apoe.]
 
+
+
 #note()[- SHort Paragraph about LPS activation 
     - LPS activation of microglia as a model for neuroinflammation
     - Mention Unpublished data from lab that early life inflammation can lead to long term changes in microglia
