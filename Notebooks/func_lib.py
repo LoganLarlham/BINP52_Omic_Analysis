@@ -10,12 +10,14 @@ import pandas as pd
 import scipy.sparse
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
+import inspect
 from scipy.stats import ttest_ind
 from statsmodels.stats.multitest import multipletests
 from adjustText import adjust_text
 from matplotlib_venn import venn2
 from typing import List, Optional, Union
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
 
 homeo_genes = ['Sall1', 'Cx3cr1', 'P2ry12', 'Olfml3', 'Tmem119', 'Cd68', 'Itgam', 'Cst3']
 DAM_genes = ['Apoe', 'B2m', 'Ctsb', 'Lpl', 'Cst7', 'Tyrobp', 'Trem2', 'Cd9', 'Itgax', 'Cd63', 'Fth1', 'Fabp5', 'Spp1', 'Axl', 'Mertk', 'Mdk', 'Ptn', 'Lgals3']
@@ -88,64 +90,63 @@ def summarize_adata(adata, mt_gene_prefix="mt-", ribo_gene_prefixes=("Rps", "Rpl
 
 def QC_filter_adata(adata, mt_threshold=5, ribo_threshold=5, min_counts=500, min_genes=200, min_cells=3):
     """
-    Perform quality control filtering on AnnData object.
+    Perform quality control filtering on an AnnData object.
 
     Parameters:
-    adata (AnnData): The input AnnData object.
-    mt_threshold (float): Threshold for the percentage of mitochondrial genes. Default is 5.
-    ribo_threshold (float): Threshold for the percentage of ribosomal genes. Default is 5.
-    min_counts (int): Minimum number of counts required for a cell. Default is 500.
-    min_genes (int): Minimum number of genes required for a cell. Default is 200.
-    min_cells (int): Minimum number of cells required for a gene to be kept. Default is 3.
+    ----------
+    adata : AnnData
+        The input AnnData object containing single-cell RNA-seq data.
+    mt_threshold : float, optional
+        Maximum allowed percentage of mitochondrial gene counts per cell (default: 5%).
+    ribo_threshold : float, optional
+        Minimum required percentage of ribosomal gene counts per cell (default: 5%).
+    min_counts : int, optional
+        Minimum total UMI counts per cell required to retain the cell (default: 500).
+    min_genes : int, optional
+        Minimum number of genes detected per cell required to retain the cell (default: 200).
+    min_cells : int, optional
+        Minimum number of cells a gene must be expressed in to retain the gene (default: 3).
 
     Returns:
-    AnnData: The filtered AnnData object.
+    -------
+    AnnData
+        Filtered AnnData object after applying all quality control thresholds.
     """
-    
-    # Annotate the group of mitochondrial and ribosomal genes
+
+    # Annotate mitochondrial and ribosomal genes
     adata.var["mt"] = adata.var_names.str.startswith("mt-")
     adata.var["ribo"] = adata.var_names.str.startswith("Rps") | adata.var_names.str.startswith("Rpl")
 
-    #Print number of cells and genes before filtering
     print(f"Initial AnnData has {adata.n_obs} cells and {adata.n_vars} genes")
 
     # Calculate QC metrics
     sc.pp.calculate_qc_metrics(adata, qc_vars=["mt", "ribo"], percent_top=None, log1p=False, inplace=True)
 
-    # Print the number of cells with more than mt_threshold percent mitochondrial genes
-    cells_with_more_than_mt_threshold = (adata.obs["pct_counts_mt"] > mt_threshold).sum()
-    print(f"{cells_with_more_than_mt_threshold} of {adata.n_obs} cells contain more than {mt_threshold}% mitochondrial genes. Will be filtered")
+    # Identify cells failing each criterion
+    cells_mt = adata.obs["pct_counts_mt"] > mt_threshold
+    cells_ribo = adata.obs["pct_counts_ribo"] < ribo_threshold
+    cells_counts = adata.obs["total_counts"] < min_counts
+    cells_genes = adata.obs["n_genes_by_counts"] < min_genes
 
-    # Print the number of cells with less than ribo_threshold percent ribosomal genes
-    cells_with_less_than_ribo_threshold = (adata.obs["pct_counts_ribo"] < ribo_threshold).sum()
-    print(f"{cells_with_less_than_ribo_threshold} of {adata.n_obs} cells contain less than {ribo_threshold}% ribosomal genes. Will be filtered")
+    # Print number of cells failing each individual filter
+    print(f"{cells_mt.sum()} cells have >{mt_threshold}% mitochondrial genes.")
+    print(f"{cells_ribo.sum()} cells have <{ribo_threshold}% ribosomal genes.")
+    print(f"{cells_counts.sum()} cells have <{min_counts} total counts.")
+    print(f"{cells_genes.sum()} cells have <{min_genes} expressed genes.")
 
-    # Filter cells with more than mt_threshold percent mitochondrial genes
-    adata = adata[adata.obs.pct_counts_mt < mt_threshold, :]
+    # Combine all filters into a single mask (remove if failing any)
+    combined_failed_cells = cells_mt | cells_ribo | cells_counts | cells_genes
+    print(f"{combined_failed_cells.sum()} unique cells will be removed based on combined QC thresholds.")
 
-    # Filter cells with less than ribo_threshold percent ribosomal genes
-    adata = adata[adata.obs.pct_counts_ribo >= ribo_threshold, :]
+    # Apply filtering
+    adata = adata[~combined_failed_cells, :].copy()
 
-    # Print the number of cells with fewer than min_counts counts to be filtered
-    cells_with_less_than_min_counts = (adata.X.sum(axis=1) < min_counts).sum()
-    print(f"{cells_with_less_than_min_counts} of {adata.n_obs} cells have fewer than {min_counts} counts. Will be filtered")
-
-    # Apply additional filtering based on counts, genes, and cells
-    sc.pp.filter_cells(adata, min_counts=min_counts)
-
-    # Print the number of cells with fewer than min_genes genes to be filtered
-    cells_with_less_than_min_genes = (adata.X > 0).sum(axis=1) < min_genes
-    print(f"{cells_with_less_than_min_genes.sum()} of {adata.n_obs} cells have fewer than {min_genes} genes. Will be filtered")
-
-    sc.pp.filter_cells(adata, min_genes=min_genes)
-
-    # Print the number of genes expressed in fewer than min_cells cells to be filtered
-    genes_with_less_than_min_cells = (adata.X > 0).sum(axis=0) < min_cells
-    print(f"{genes_with_less_than_min_cells.sum()} of {adata.n_vars} genes are expressed in fewer than {min_cells} cells. Will be filtered")
+    # Filter genes expressed in too few cells
+    genes_cells = (adata.X > 0).sum(axis=0) < min_cells
+    print(f"{genes_cells.sum()} genes are expressed in fewer than {min_cells} cells. Will be filtered.")
 
     sc.pp.filter_genes(adata, min_cells=min_cells)
 
-    # Print the total number of cells and genes after filtering
     print(f"Filtered AnnData has {adata.n_obs} cells and {adata.n_vars} genes")
 
     # Recalculate QC metrics for the filtered data
@@ -1122,6 +1123,250 @@ def plot_volcano_from_df(
     }
 
     return annotated_genes
+
+def custom_volcano_plot(
+    df,
+    logfc_col='log2FoldChange',
+    pval_col='padj',
+    lfc_thresh=0.25,
+    pval_thresh=0.05,
+    label_genes=None,
+    top_n=10,
+    x_lim=None,
+    y_lim=None,
+    figsize=(8, 6),
+    dpi=300,
+    title=None,
+    use_adjust_text=True,
+):
+    """Volcano plot with optional auto‑labelling.
+
+    If *label_genes* is **None**, the *top_n* most significant (–log₁₀ p)
+    red/blue genes are labelled automatically.
+    Axis limits can be overridden via *x_lim* and *y_lim*.
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from adjustText import adjust_text
+
+    df = df.copy()
+    df['-log10_pval'] = -np.log10(df[pval_col])
+
+    # colour assignment
+    df['color'] = 'gray'
+    df.loc[(df[logfc_col] >  lfc_thresh) & (df[pval_col] < pval_thresh), 'color'] = 'red'
+    df.loc[(df[logfc_col] < -lfc_thresh) & (df[pval_col] < pval_thresh), 'color'] = 'blue'
+
+    # auto‑select genes if none supplied
+    if label_genes is None:
+        sig = df['color'] != 'gray'
+        label_genes = df[sig].nlargest(top_n, '-log10_pval').index.tolist()
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    ax.scatter(df[logfc_col], df['-log10_pval'], c=df['color'], alpha=0.7)
+
+    # significance thresholds
+    y_thr = -np.log10(pval_thresh)
+    x_thr = lfc_thresh
+
+    # optional axis limits
+    if x_lim is not None:
+        ax.set_xlim(*x_lim)
+    if y_lim is not None:
+        ax.set_ylim(*y_lim)
+
+    # draw threshold lines spanning full axes
+    ax.axhline(y=y_thr, linestyle='--', color='black')
+    ax.axvline(x=x_thr,  linestyle='--', color='black')
+    ax.axvline(x=-x_thr, linestyle='--', color='black')
+
+    ax.set_xlabel('log₂ fold‑change')
+    ax.set_ylabel('–log₁₀ adjusted p')
+    if title:
+        ax.set_title(title)
+
+    # label genes
+    up_texts, down_texts = [], []
+    for gene in label_genes:
+        if gene not in df.index:
+            continue
+        x, y = df.at[gene, logfc_col], df.at[gene, '-log10_pval']
+        t = ax.text(x, y, gene, fontsize=9,
+                    bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.2'))
+        if x > 0:
+            up_texts.append(t)
+        else:
+            down_texts.append(t)
+
+    # directional nudging using adjustText
+    if use_adjust_text:
+        if up_texts:
+            adjust_text(up_texts, ax=ax,
+                        only_move={'static': 'yx+', 'text': 'yx+'},
+                        ensure_inside_axes=True,
+                        explode_radius=6,
+                        pull_threshold=3,
+                        force_text=[5, 5],
+                        force_static=[2, 1],
+                        force_pull=[0.1, 0.1],
+                        arrowprops=dict(arrowstyle='->', color='black', shrinkA=4))
+        if down_texts:
+            adjust_text(down_texts, ax=ax,
+                        only_move={'static': 'yx-', 'text': 'yx-'},
+                        ensure_inside_axes=True,
+                        explode_radius=6,
+                        pull_threshold=3,
+                        force_text=[5, 5],
+                        force_static=[2, 1],
+                        force_pull=[0.1, 0.1],
+                        arrowprops=dict(arrowstyle='->', color='black', shrinkA=4))
+
+    plt.tight_layout()
+    plt.show()
+    return fig
+
+
+
+def bivariate_quadrant_plot(
+    df1, df2,
+    label='log2FoldChange',
+    label_genes=None,
+    lfc_thresh=0.25,
+    x_label=None, y_label=None,
+    x_lim=None, y_lim=None,
+    title=None,
+    figsize=(6, 6), dpi=300,
+    use_adjust_text=True
+):
+    """
+    Bivariate plot of two log2FC vectors, coloring by quadrant based on log2FC thresholds only.
+    Inclusion criteria: gene must be present in both df1 and df2 and have no NaNs in logFC or p-value.
+    Coloring:
+      - Red   = logFC_x >  lfc_thresh AND logFC_y >  lfc_thresh
+      - Blue  = logFC_x < -lfc_thresh AND logFC_y < -lfc_thresh
+      - Purple= one logFC > lfc_thresh and the other < -lfc_thresh
+      - Gray  = any gene not meeting both |logFC| > lfc_thresh
+    If label_genes is None, automatically label up to 10 genes per colored quadrant
+    with the largest |logFC_x + logFC_y|.
+    Optionally, pass x_label and y_label to override axis titles.
+    Optionally, pass x_lim and y_lim as tuples to set axis limits.
+    Adds Pearson correlation annotation and a dotted regression line,
+    calculated only on the colored points.
+    """
+    # Handle axis labels
+    if x_label is None or y_label is None:
+        import inspect
+        frame = inspect.currentframe().f_back
+        names = {id(val): name for name, val in frame.f_locals.items()}
+        if x_label is None:
+            x_label = names.get(id(df1), 'Comparison A')
+        if y_label is None:
+            y_label = names.get(id(df2), 'Comparison B')
+
+    # Intersect indices and build working DataFrame
+    common = df1.index.intersection(df2.index)
+    df = pd.DataFrame({
+        'logFC_x': df1.loc[common, label],
+        'logFC_y': df2.loc[common, label],
+        'pval_x':  df1.loc[common, 'padj'],
+        'pval_y':  df2.loc[common, 'padj']
+    }).dropna()
+
+    # Mask of genes passing logFC thresholds in BOTH comparisons
+    mask = (
+        (df['logFC_x'].abs() > lfc_thresh)
+        & (df['logFC_y'].abs() > lfc_thresh)
+    )
+
+    # Assign colors based only on logFC quadrant
+    def quadrant_color(r):
+        if not mask.loc[r.name]:
+            return 'gray'
+        if r['logFC_x'] >  lfc_thresh and r['logFC_y'] >  lfc_thresh:
+            return 'red'
+        if r['logFC_x'] < -lfc_thresh and r['logFC_y'] < -lfc_thresh:
+            return 'blue'
+        return 'purple'
+
+    df['color'] = df.apply(quadrant_color, axis=1)
+
+    # If no explicit labels, pick top genes by |logFC_x + logFC_y| in each colored quadrant
+    if label_genes is None:
+        scores = (df['logFC_x'] + df['logFC_y']).abs()
+        computed_labels = []
+        for col in ['red', 'blue', 'purple']:
+            genes_in_col = df.index[df['color'] == col]
+            if not genes_in_col.empty:
+                top_genes = scores.loc[genes_in_col].nlargest(10).index.tolist()
+                computed_labels.extend(top_genes)
+        label_genes = computed_labels
+
+    # Filter only colored points for correlation and regression
+    df_colored = df[df['color'] != 'gray']
+
+    # Compute Pearson correlation and regression line on colored points
+    from scipy.stats import pearsonr, linregress
+    if not df_colored.empty:
+        r_val, p_val = pearsonr(df_colored['logFC_x'], df_colored['logFC_y'])
+        slope, intercept, _, _, _ = linregress(df_colored['logFC_x'], df_colored['logFC_y'])
+    else:
+        r_val, p_val, slope, intercept = [float('nan')]*4
+
+    # Plot
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    ax.scatter(df['logFC_x'], df['logFC_y'], c=df['color'], alpha=0.7)
+
+    # Plot infinite regression line
+    if not df_colored.empty:
+        ax.axline((0, intercept), slope=slope, linestyle=':', color='black', linewidth=1)
+
+    # Annotate correlation
+    ax.text(
+        0.05, 0.95,
+        f"r={r_val:.2f}\np={p_val:.2g}",
+        transform=ax.transAxes,
+        ha='left', va='top', fontsize=10,
+        bbox=dict(facecolor='white', edgecolor='none', pad=2)
+    )
+
+    # Draw threshold lines
+    ax.axvline( lfc_thresh, color='black', linestyle='--')
+    ax.axvline(-lfc_thresh, color='black', linestyle='--')
+    ax.axhline( lfc_thresh, color='black', linestyle='--')
+    ax.axhline(-lfc_thresh, color='black', linestyle='--')
+
+    # Apply optional axis limits
+    if x_lim is not None:
+        ax.set_xlim(*x_lim)
+    if y_lim is not None:
+        ax.set_ylim(*y_lim)
+
+    ax.set_xlabel(f'{x_label} (log₂FC)')
+    ax.set_ylabel(f'{y_label} (log₂FC)')
+    if title:
+        ax.set_title(title)
+
+    # Gene labeling
+    if label_genes:
+        texts = []
+        for g in label_genes:
+            if g in df.index and df.at[g, 'color'] != 'gray':
+                x, y = df.at[g, 'logFC_x'], df.at[g, 'logFC_y']
+                texts.append(ax.text(x, y, g, fontsize=9))
+        if use_adjust_text and texts:
+            from adjustText import adjust_text
+            adjust_text(
+                texts,
+                ax=ax,
+                arrowprops=dict(arrowstyle='->', color='black', shrinkA=5),
+                expand_axes=True
+            )
+        for t in texts:
+            t.set_bbox(dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.2'))
+
+    plt.tight_layout()
+    return fig
+
 
 def get_significant_genes(adata, group='', logfc_threshold=0.3, pval_threshold=0.05, top_n=None):
     # Extract log fold changes and adjusted p-values for the specified group
