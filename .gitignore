@@ -1,17 +1,6 @@
-# Ignore everything
-**
-
-# Exclude .gitignore from being ignored to apply rules
-!.gitignore
-!.gitattributes
-
-# Allow .ipynb files in any directory
-!**/
-!**/*.ipynb
-!**/*.py
-!**/*.html
-*concat.ipynb
-*final_notebook.ipynb
-Lluis/*
-.Rproj.user
-!Writing/*
+!/data/
+!/scripts/
+!/results/
+!/README.md
+!/environment.yml
+/*
