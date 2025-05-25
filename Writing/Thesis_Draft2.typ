@@ -44,7 +44,7 @@
   Tomas Deierborg
   \
   \
-  #text(16pt)[Master’s in bioinformatics, Course BINP52, 60cr]]
+  #text(16pt)[Master’s in Bioinformatics, Course BINP52, 60cr]]
 
 
   #block(move(dy:175pt)[Email: #underline[LoganHLarlham\@gmail.com] \
@@ -55,7 +55,7 @@
 
 #set par(spacing: 3em)
 #set par(leading: 2em,  justify: true, first-line-indent: 2em)
-#set page(numbering: "1/1", number-align: right,)
+#set page(numbering: "1/1", number-align: right, footer-descent: 55%)
 #counter(page).update(1) 
 
 #let note(body, size: 8pt, fill: rgb("EAF2F5")) = {
@@ -71,11 +71,15 @@
 
 
 #set par.line(numbering: "1")
+#show figure: set par.line(
+  numbering: none
+)
+
 = Abstract <abstract>
 
 Alzheimer’s disease (AD) is characterized by amyloid-β (Aβ) plaque deposition, tau pathology, and neuroinflammation, with genetic variation in the apolipoprotein E (APOE) gene representing the strongest risk factor for late-onset AD. Microglia, the brain’s resident immune cells, are increasingly recognized as central to disease progression through their roles in neuroinflammation and Aβ clearance. In this study, we investigated how APOE genotype (E3 vs E4) and early-life inflammation interact to shape microglial states in a mouse model of Aβ pathology. Using single-cell RNA sequencing of microglia isolated from EFAD mice treated with lipopolysaccharide (LPS) or vehicle at postnatal day 9, we identified distinct microglial transcriptional states and assessed their proportions and gene expression profiles. E4FAD mice exhibited a higher proportion of disease-associated microglia (DAM) compared to E3FAD mice. Moreover, early-life inflammation induced long-lasting, genotype-specific alterations: LPS reduced the abundance of an NF-κB-enriched Cytokine Response microglial population and downregulated pro-inflammatory genes in E4FAD, but not E3FAD, mice. These findings suggest that early-life immune events interact with APOE genotype to shape microglial responses to amyloid pathology and may offer targets for modulating disease-associated inflammation.
 
-= Introduction/Background <introduction>
+= Introduction <introduction>
 
 === Alzheimer’s Disease and Neuroinflammation 
 
@@ -278,7 +282,7 @@ Following dimensionality reduction and Leiden clustering, we identified nine dis
 
 These expression profiles are visualized in Figure 1. The UMAP plots (Figure 1a) show cluster organization across the entire dataset and by condition. Figure 1b displays the top 10 DEGs for each cluster when compared to the rest, and Figure 1c shows density plots of cluster distributions per condition.
 
-#figure(caption:[ Distinct Expression Clusters and Their Proportions by Condition \ #text(weight:"regular", size: 11pt)[*a.* UMAP visualizations of the dataset colored by manually annotated expression profiles, entire dataset, and by condition. *b.* Heatmap of the top 10 differentially expressed genes for each cluster expression profile showing scaled log-normalized expression values (z-scores) *c.* UMAP density plots for each condition.]],
+#figure(caption:[ Distinct Expression Clusters and Their Proportions by Condition \ #text(weight:"regular", size: 8pt)[*a.* UMAP visualizations of the dataset colored by manually annotated expression profiles, entire dataset, and by condition. *b.* Heatmap of the top 10 differentially expressed genes for each cluster expression profile showing scaled log-normalized expression values (z-scores) *c.* UMAP density plots for each condition.]],
 image("figs/fig1.svg")
 )
 
@@ -293,7 +297,7 @@ The DAM (Disease-Associated Microglia) cluster showed a transcriptional profile 
 After identifying different expression profiles in the dataset, the relative abundance of each cell type was assessed across experimental conditions. The proportions observed in the eight experimental groups are shown in Figure 2a, with absolute cell counts presented in Supplementary Figure 2 and corresponding values listed in Supplementary Table 2.
 Disease versus wild-type is the main cause of variation in cell type composition, with the most pronounced differences observed in the homeostatic and DAM clusters. Homeostatic cells accounted for 39–56% of the population in WT mice, compared to only 3–17% in FAD mice, representing a statistically significant reduction (ANOVA p < 1e-8; linear model coefficient = +46.2%, p < 0.001). The APOE genotype was not associated with a statistically significant change in homeostatic cell proportions, nor was there a significant difference with LPS treatment. 
 
-#figure(caption:[ Changes in Cluster Proportions by Condition \ #text(weight:"regular", size: 11pt)[*a.* Stacked Bar plot of the proportion of each cluster in each condition. *b.* Bar plots of the proportion of specific clusters in each condition, significant differences determine by three way anova and Tukey's post-hoc test and indicated by asterisks. ]],
+#figure(caption:[ Changes in Cluster Proportions by Condition \ #text(weight:"regular", size: 8pt)[*a.* Stacked Bar plot of the proportion of each cluster in each condition. *b.* Bar plots of the proportion of specific clusters in each condition, significant differences determine by three way anova and Tukey's post-hoc test and indicated by asterisks. ]],
 image("figs/fig2.svg")
 )
 
@@ -305,7 +309,7 @@ The Cytokine Response cluster shows an interesting pattern in which the E4FAD LP
 
 To more robustly identify differentially expressed genes (DEGs) between conditions, pseudobulk analysis was performed on the dataset. This involves summing the expression each gene in all cells from an individual mouse to create a single expression profile, aiding in overcoming the sampling variability in single cell RNA sequencing. The pseudobulk profiles can then be used to identify DEGs with methods typically used for bulk RNA sequencing data, such as DESeq2 which produces fewer false positives than the more common Wilcoxon rank-sum test used in single cell analysis. 
 DEGs were identified between the LPS and vehicle treatment groups in the four genetic backgrounds, the results of which are visible in the volcano plots in Figure 3a. There are no more than 1 significant DEG which is shared between any of the comparisons. However, as a general pattern it can be seen that the FAD mice have a much larger number of downregulated genes in the LPS treatment group compared to the vehicle group, while the WT mice show a much smaller number of downregulated genes.
-#figure(caption:[Differentially expressed Genes and Pathways in LPS versus Vehicle Treated Mice\ #text(weight:"regular", size: 11pt)[*a.* Volcano plots of pseudobulk DEGs in LPS versus vehicle comparisons in the four genotypes with top genes labelled. *b.* Correlation plot of LogFC values of genes in LPS versus vehicle treatment in E3FAD compared to E4FAD. Pearson's correlation computed on genes above the logFC threshold of 0.25 *c.* GSEA of significant pathways in the LPS versus vehicle comparisons computed on Wald test statistics.]],
+#figure(caption:[Differentially expressed Genes and Pathways in LPS versus Vehicle Treated Mice\ #text(weight:"regular", size: 8pt)[*a.* Volcano plots of pseudobulk DEGs in LPS versus vehicle comparisons in the four genotypes with top genes labelled. *b.* Correlation plot of LogFC values of genes in LPS versus vehicle treatment in E3FAD compared to E4FAD. Pearson's correlation computed on genes above the logFC threshold of 0.25 *c.* GSEA of significant pathways in the LPS versus vehicle comparisons computed on Wald test statistics.]],
 image("figs/fig3.svg")
 )
 When the E3FAD and E4FAD LPS treatment group DEGs are compared, a statistically significant correlation is observed (Pearson's r = -0.44, p = 1.5e-5), indicating that genes that are upregulated in E3FAD mice are likely to be downregulated in E4FAD mice. A number of these genes are those associated with the NfkB pathway, including Ccl4, Tlr2, and Nfkbia. 
@@ -319,7 +323,7 @@ The Cytokine Response cluster was marked by elevated expression of genes associa
 
 These expression patterns are shown in Figure 4. UMAP projections reveal that these transcripts are highly expressed within the Cytokine Response cluster, with limited expression in other microglial states. Violin plots further illustrate the cluster-specific enrichment of these genes.
 
-#figure(caption:[Genes in the Cytokine Response Cluster \ #text(weight:"regular", size: 11pt)[UMAP plots of the dataset colored by the expression of specific genes which are differentially upregulated in the Cytokine Response cluster and which are part of the NF-κB pathway paired with the violin plots in all clusters.]],
+#figure(caption:[Genes in the Cytokine Response Cluster \ #text(weight:"regular", size: 8pt)[UMAP plots of the dataset colored by the expression of specific genes which are differentially upregulated in the Cytokine Response cluster and which are part of the NF-κB pathway paired with the violin plots in all clusters.]],
 image("figs/fig4.svg")
 )
 
@@ -331,14 +335,31 @@ When compared to the DAM cluster, the Cytokine Response cluster remained distinc
 
 #figure(
   caption: [Comparison of Overlapping and Distinct Features Between Microglial States \ 
-  #text(weight: "regular", size: 11pt)[Dot plot showing the expression of immediate early genes (IEGs), homeostatic markers, DAM-associated genes, and NF-κB pathway-related transcripts across the Cytokine Response, IEG-enriched, and DAM clusters. Dot size represents the fraction of cells expressing each gene, calculated using a threshold of log-normalized expression > 0 (equivalent to raw counts ≥ 1). Color indicates average expression level scaled across clusters (Z-score normalized).] ],
+  #text(weight: "regular", size: 8pt)[Dot plot showing the expression of immediate early genes (IEGs), homeostatic markers, DAM-associated genes, and NF-κB pathway-related transcripts across the Cytokine Response, IEG-enriched, and DAM clusters. Dot size represents the fraction of cells expressing each gene, calculated using a threshold of log-normalized expression > 0 (equivalent to raw counts ≥ 1). Color indicates average expression level scaled across clusters (Z-score normalized).] ],
   image("figs/fig5.svg")
 )
 
 === Proteomic Analysis
 
-The relationship between mRNA from transcriptomic analysis and protein levels in vivo is complex and affected by many factors including translation, post-translational modifications, and degradation. It is well known to not be a one-to-one relationship, and the correlation between mRNA and protein levels varies by tissue type and cell type and is often low (Liu 2016). In order to further support the findings from the transcriptomic analysis, proteomic analysis was performed on the same samples.
-.... to be continued
+The relationship between mRNA abundance and protein levels in vivo is complex and influenced by translational regulation, post-translational modifications, and protein degradation. Therefore, transcript levels often do not directly predict protein abundance, with reported correlations varying widely across tissues and cell types and frequently being low (Liu et al. 2016). To corroborate and extend our transcriptomic findings, mass spectrometry–based proteomic analysis was performed on the same individuals used for single-cell sequencing.
+
+A total of 8 065 proteins were quantified across all samples. UniProt mouse identifiers were mapped to gene symbols (GRCm39) using the R package org.Mm.eg.db, allowing direct comparison with the transcriptomic dataset. The proteomic cohort comprised the female whole-cortex samples from LPS and vehicle groups of E3FAD and E4FAD mice (n = 5 per condition), plus additional samples not included in the transcriptomics (yielding up to five replicates per group). Unlike the microglia-enriched preparations used for transcriptomics, proteomic profiling was performed on whole cortex. Although wild-type and male cohorts were also analyzed, only E3FAD and E4FAD mice are included here to align with the transcriptomic analysis.
+
+Principal component analysis (PCA) of the log₂-transformed LFQ intensities revealed clear separation by APOE genotype but no discernible clustering by treatment (Fig 6a), indicating that LPS priming did not induce a major shift in the cortical proteome. Consistent with this, differential abundance analysis using limma on imputed LFQ values identified no proteins with significant changes (FDR < 0.05) between LPS and vehicle in either genotype.
+
+To assess concordance between transcriptomic and proteomic responses to LPS, we compared the log₂ fold changes of differentially expressed genes (DEGs) from the RNA-seq analysis to the corresponding values for their protein products (n = 7 051 matched identifiers). Spearman correlation coefficients were $rho$ = 0.032 (p = 0.007) for E3FAD and $rho$ = 0.013 (p = 0.028) for E4FAD (Fig 6c), indicating extremely weak correlation between mRNA and protein fold-change directions.
+
+Despite the lack of individually significant proteins and the low global correlation, differentially abundant proteins can be visualized in a clustered heatmap (Fig 6b). To determine whether pathway-level signals might emerge, we applied Camera to test KEGG Medicus Reference pathways for enrichment against the full set of log₂ fold changes. This approach can detect changes in pathway enrichment even when individual proteins fail to reach statistical significance by leveraging coordinated shifts across gene sets.
+
+After multiple-testing correction, the “TNF NFKB signaling pathway” was the only KEGG pathway significantly enriched (FDR < 0.05) in the upregulated direction for E3FAD mice treated with LPS (Fig 6d). This finding aligns with our transcriptomic GSEA results, which also highlighted TNF-NF-κB activation in E3FAD LPS samples. In the E4FAD LPS group, the pathway showed a trend toward downregulation but did not reach FDR < 0.05. The interaction contrast, however, met FDR < 0.25 for downregulation,  pointing to genotype-dependent changes in NF-κB signaling after LPS treatment.
+
+#show figure: set block(breakable: true)
+#figure(
+  caption: [Proteomic Analysis of LPS effect in E3/E4FAD \ 
+  #text(weight: "regular", size: 8pt)[*a.* PCA plot of proteomic data for E3FAD and E4FAD female mice in LPS and Vehicle treatment groups. *b.* Heatmap of Z-score scaled logFC of proteins with smallest nominal P values for the LPS treatment effect in both genotypes, and the interaction term which indicates those which have the biggest different treatment effect between the two genotypes. Rows correspond to individual samples. both Rows and Columns are ordered by heirarchical clustering. *c.* Scatter plots comparing Logfc values after LPS treatment in both genotypes in the proteomic data against the transcriptomic data. Only proteins/genes which could be matched between both were kept (n = 7051). Spearman correlation calculated (E3FAD:$rho$=0.032, p = 0.007; E4FAD:$rho$=0.013, p=0.028) *d.* Dot plot of all pathways which have a FDR < 0.25 in atleast on contrast. Dot coloured by direction of enrichment and dot shape corresponds to FDR values. ] ],
+  image("figs/fig6.svg")
+)
+#show figure: set block(breakable: false)
 
 
 = Discussion <discussion>
@@ -353,13 +374,15 @@ APOE genotype remains the strongest genetic risk factor for late-onset Alzheimer
 
 === Early-Life Immune Priming Alters Microglia Trajectory
 
-LPS priming of microglia has been shown to influence their function both acutely and over extended periods following the initial insult @perry_microglial_2014. Unpublished data from members of our lab have demonstrated that LPS administration at postnatal day 9 alters the microglial response to amyloid pathology later in life. Changes were observed in the transcriptional levels of specific cytokines, and a microglial population not present in vehicle-treated mice was identified (@yang_lps_2023, preprint). These findings, combined with the well-established role of APOE in modulating microglial state and inflammatory signaling, motivated the present analysis to investigate how human APOE isoforms may interact with early-life immune priming to shape microglial phenotypes in the context of AD-related pathology.(should I add a sentence here saying why post-natal day 9?)
+LPS priming of microglia has been shown to influence their function both acutely and over extended periods following the initial insult @perry_microglial_2014. Unpublished data from members of our lab have demonstrated that LPS administration at postnatal day 9 alters the microglial response to amyloid pathology later in life. Changes were observed in the transcriptional levels of specific cytokines, and a microglial population not present in vehicle-treated mice was identified (@yang_lps_2023, preprint). These findings, combined with the well-established role of APOE in modulating microglial state and inflammatory signaling, motivated the present analysis to investigate how human APOE isoforms may interact with early-life immune priming to shape microglial phenotypes in the context of AD-related pathology.
 
 The data presented here provide additional evidence for the impact of APOE genotype on microglial phenotypes and the modulatory effect of LPS priming. As expected, a majority of microglia in non-disease (WT) mice were assigned to the homeostatic cluster, with near-zero representation in the disease-associated transcriptomic profiles. In contrast, FAD mice exhibited a substantial shift, with large proportions of their microglial populations classified into disease-associated clusters and a corresponding reduction in homeostatic cells. An increased proportion of microglia in the DAM cluster was observed in E4FAD mice compared to their E3FAD counterparts, consistent with previous studies using mice expressing human APOE alleles.
 
 === Genotype-Specific Modulation of Inflammatory Signal
 
 The analysis shows a genotype-specific priming effect on the expression of particular cytokines and inflammatory genes, primarily those in the canonical NF-κB signaling pathway. In mice treated with LPS, a downregulation of these genes was observed specifically in E4FAD animals, while an upregulation was seen in the LPS-treated E3FAD group (Fig. 3). The genes associated with these pathways were not expressed uniformly across the microglial population, indicating that the observed transcriptional changes were not global but instead reflect the behavior of a specific microglial subset. This subset, identified as the Cytokine Response cluster, was not present in non-disease mice, indicating that its emergence is dependent on amyloid pathology. Cluster-level analysis suggests that the observed pathway-level effect in E4FAD mice treated with LPS is driven by a reduction in the proportion of microglia occupying this state.
+
+To determine whether these APOE- and treatment-specific transcriptional signatures translate to protein abundance, we performed LC–MS/MS–based proteomics on the matching cortex samples. PCA of LFQ intensities separated samples by APOE genotype but not by LPS treatment, and limma analysis revealed no individual proteins with FDR < 0.05. Nonetheless, pathway enrichment on the fold-change values identified the TNF-NF-κB signalling cascade as significantly upregulated in E3FAD + LPS (FDR < 0.05) and trending down in E4FAD + LPS (interaction FDR < 0.25), mirroring the observed transcriptomic pattern between genotypes.
 
 === Contextualizing the Cytokine Response Cluster
 
@@ -379,7 +402,7 @@ Further evidence for the biological relevance of this type of expression pattern
 
 A more recent study by Mulenge et al. @mulenge_transcriptomic_2024 extended the work of Marsh by evaluating the effects of both dissociation and sorting. They confirmed that transcriptional inhibitors can suppress IEG expression but also showed that FACS sorting itself induces an ex vivo activation signature. Specifically, they found that Zfp36, Dusp1, Jun, Ccl4, Ccl3, Tnf, Socs3, and Hspa1a were consistently upregulated across sorted datasets. However, they noted that this expression was generally elevated across the entire dataset and not confined to specific clusters.
 
-In our data, by contrast, these IEG and cytokine-related genes are not uniformly upregulated across the full microglial population but are instead restricted to the Cytokine Response and IEG-enriched clusters. This spatial restriction, along with parallels to expression profiles seen in Mancuso and Millet even in the presence of transcriptional inhibitors, supports the interpretation that these clusters represent true biological microglial states, not merely artifacts of tissue processing.
+In our data, IEG and cytokine-related transcripts were not uniformly elevated across all microglia but confined to the Cytokine Response and IEG-enriched clusters. This spatial restriction suggests a bona fide subpopulation rather than a global dissociation artifact. Importantly, bulk proteomic profiling of the same cortex samples independently highlighted the TNF–NF-κB signalling cascade—central to cytokine responses—as significantly enriched in E3FAD LPS–treated mice (Fig. 6d). The concordant pathway-level signal at both RNA and protein layers, together with parallels in Mancuso and Millet’s studies, reinforces the conclusion that these clusters reflect true biological microglial states.
 
 === Conclusions and Future Directions
 
@@ -409,7 +432,7 @@ Continued investigation of these microglial populations will be important for un
 
 #show table.cell.where(y: 0, ): set text(size: 8pt)
 #figure(
-  caption:[Detailed Summary of Quality Control Filtering for Each Dataset\ #text(weight:"regular")[]],
+  caption:[Detailed Summary of Quality Control Filtering for scRNA-seq libraries\ #text(weight:"regular")[]],
 table(
   stroke: none,
   align: bottom,
