@@ -1,11 +1,14 @@
 # keep these
 !/data/
 !/scripts/
-!/results/
 !/README.md
 !/environment.yml
 !/renv/
 !/renv.lock
+
+# don't track results
+/results/
+
 
 # ignore everything else at the root
 /*
