@@ -16,5 +16,8 @@
 # still explicitly ignore raw transcriptomic data
 /data/transcriptomic/raw/
 
+# do not track saved AnnData objects
+/results/transcriptomic/tables/*.h5ad
+
 # misc
 .Rproj.user
