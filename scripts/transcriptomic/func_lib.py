@@ -147,82 +147,55 @@ def QC_filter_adata(adata, mt_threshold=5, ribo_threshold=5, min_counts=500, min
 
     return adata
 
+
 def visualize_QC_measures(adata, title="QC Measures"):
     """
-    Visualize QC measures in violin plots.
-
-    Parameters:
-    adata (AnnData or dict of AnnData): The input AnnData object or a dictionary of AnnData objects.
-    title (str): The title of the plot. Default is "QC Measures".
+    Visualize QC measures in violin and scatter plots.
     """
+    qc_keys = ["n_genes_by_counts", "total_counts", "pct_counts_mt", "pct_counts_ribo"]
+
+    def plot_scatter(single_adata, color_key, title):
+        sc.pl.scatter(
+            single_adata,
+            x="total_counts",
+            y="n_genes_by_counts",
+            color=color_key,
+            title=title,
+            show=True
+        )
+
     if isinstance(adata, dict):
-        # Handling dictionary of AnnData objects
         print(f"Visualizations {title} for multiple datasets:")
-        
-        # Combined violin plots
-        combined_data = adata[list(adata.keys())[0]].concatenate(*[adata[key] for key in list(adata.keys())[1:]], batch_key="dataset", batch_categories=list(adata.keys()))
-        sc.pl.violin(combined_data, ["n_genes_by_counts", "total_counts", "pct_counts_mt", "pct_counts_ribo"], groupby="dataset", jitter=0.4, multi_panel=True, stripplot=False)
-        
-        # Scatter plots for each dataset
-        fig, axes = plt.subplots(1, len(adata), figsize=(15, 5))
-        if len(adata) == 1:
-            axes = [axes]
-            
-            sc.pl.scatter(single_adata, x="total_counts", y="n_genes_by_counts", color="pct_counts_mt", ax=ax, show=False)
-            ax.set_xlim(0, 40000)
-            ax.set_ylim(0, 6000)
-            ax.grid(True)
-            ax.set_title(f"{adata_key} - pct_counts_mt")
-            ax.legend(loc='upper right', bbox_to_anchor=(1.2, 1))
-        plt.tight_layout()
-        plt.show()
 
-        fig, axes = plt.subplots(1, len(adata), figsize=(15, 5))
-        if len(adata) == 1:
-            axes = [axes]
-        for ax, (adata_key, single_adata) in zip(axes, adata.items()):
-            sc.pl.scatter(single_adata, x="total_counts", y="n_genes_by_counts", color="pct_counts_ribo", ax=ax, show=False)
-            ax.set_xlim(0, 40000)
-            ax.set_ylim(0, 6000)
-            ax.grid(True)
-            ax.set_title(f"{adata_key} - pct_counts_ribo")
-            ax.legend(loc='upper right', bbox_to_anchor=(1.2, 1))
-        plt.tight_layout()
-        plt.show()
+        combined_data = adata[list(adata.keys())[0]].concatenate(
+            *[adata[key] for key in list(adata.keys())[1:]],
+            batch_key="dataset",
+            batch_categories=list(adata.keys())
+        )
+
+        # Check for missing QC fields
+        missing_keys = [key for key in qc_keys if key not in combined_data.obs.columns]
+        if missing_keys:
+            print(f"Warning: Missing the following QC fields in combined_data.obs: {missing_keys}")
+
+        valid_keys = [key for key in qc_keys if key in combined_data.obs.columns]
+        sc.pl.violin(combined_data, valid_keys, groupby="dataset", jitter=0.4, multi_panel=True, stripplot=False)
+
+        # Scatter plots for each dataset and QC metric
+        for key in ["pct_counts_mt", "pct_counts_ribo"]:
+            if key in combined_data.obs.columns:
+                for name, ad in adata.items():
+                    if key in ad.obs.columns:
+                        plot_scatter(ad, key, f"{name} - {key}")
+
     else:
-        # Handling single AnnData object
         print(f"Visualizations {title}:")
+        valid_keys = [key for key in qc_keys if key in adata.obs.columns]
+        sc.pl.violin(adata, valid_keys, jitter=0.4, multi_panel=True)
 
-        # Violin plots
-        sc.pl.violin(adata, ["n_genes_by_counts", "total_counts", "pct_counts_mt", "pct_counts_ribo"], jitter=0.4, multi_panel=True)
-        
-        # Adding gridlines to the mitochondrial and ribosomal plots
-        fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-
-        sc.pl.violin(adata, ["pct_counts_mt"], jitter=0.4, ax=axes[0], show=False)
-        sc.pl.violin(adata, ["pct_counts_ribo"], jitter=0.4, ax=axes[1], show=False)
-
-        for ax in axes:
-            ax.grid(True)
-
-        plt.tight_layout()
-        plt.show()
-
-        # Scatter plots
-        fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-        
-        sc.pl.scatter(adata, x="total_counts", y="n_genes_by_counts", color="pct_counts_mt", ax=ax[0], show=False)
-        sc.pl.scatter(adata, x="total_counts", y="n_genes_by_counts", color="pct_counts_ribo", ax=ax[1], show=False)
-
-        for a in ax:
-            a.set_xlim(0, 40000)
-            a.set_ylim(0, 6000)
-            a.grid(True)
-            a.legend(loc='upper right', bbox_to_anchor=(1.2, 1))
-
-        plt.tight_layout()
-        plt.show()
-
+        for key in ["pct_counts_mt", "pct_counts_ribo"]:
+            if key in adata.obs.columns:
+                plot_scatter(adata, key, key)
 
 def hash_demulitplex(adata, hashtag_input, number_of_noise_barcodes=None):
     """
