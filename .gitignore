@@ -1,8 +1,17 @@
+# keep these
 !/data/
 !/scripts/
 !/results/
 !/README.md
 !/environment.yml
+!/renv/
+!/renv.lock
+
+# ignore everything else at the root
 /*
+
+# still explicitly ignore raw transcriptomic data
 /data/transcriptomic/raw/
+
+# misc
 .Rproj.user
