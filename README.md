@@ -35,7 +35,7 @@ The environment.yml should contain all the info about the conda environment I us
 The renv files should contain all the packages necessary for the proteomic analysis in R.
 
 ## Project Structure  
-\`\`\`
+```
 data/
   transcriptomic/
     raw/         # raw inputs (including Results_HT)
@@ -51,7 +51,7 @@ results/
     figures/ tables/
   proteomic/
     figures/ tables/
-\`\`\`
+```
 
 ## Usage  
 - \`scripts/transcriptomic/\` contains Jupyter notebooks and helper code  
