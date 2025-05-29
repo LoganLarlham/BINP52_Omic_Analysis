@@ -287,6 +287,7 @@ def hash_demulitplex(adata, hashtag_input, number_of_noise_barcodes=None):
 
 def plot_total_counts_vs_cells(
     adata, 
+    norm=False
     bins=250, 
     zoom_x_range=(0, 3000), 
     zoom_y_range=(0, 600), 
@@ -317,8 +318,16 @@ def plot_total_counts_vs_cells(
     # Main plot
     fig, ax = plt.subplots(figsize=figure_size)
     
+    # If norm is True, use [norm_total_counts] instead of [total_counts]
+    if norm:
+        if "norm_total_counts" not in adata.obs.columns:
+            raise ValueError("norm_total_counts not found in adata.obs. Please save this data normalize the data first.")
+        ax.hist(adata.obs["norm_total_counts"], bins=bins, log=False, label="Normalized total counts in bins")
+
     # Plot the histogram of total counts
     ax.hist(adata.obs["total_counts"], bins=bins, log=False, label="Total counts in bins")
+
+
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     
