@@ -287,7 +287,7 @@ def hash_demulitplex(adata, hashtag_input, number_of_noise_barcodes=None):
 
 def plot_total_counts_vs_cells(
     adata, 
-    norm=False
+    norm=False,
     bins=250, 
     zoom_x_range=(0, 3000), 
     zoom_y_range=(0, 600), 
@@ -772,6 +772,68 @@ def custom_volcano_plot(
     plt.show()
     return fig
 
+
+def summarize_anova_tukey_results(cell_type, df_long, model, anova_table, tukey):
+    """
+    Summarizes three-way ANOVA and Tukey HSD test results for one cell type.
+    
+    Parameters:
+        cell_type (str): Name of the cell type.
+        df_long (pd.DataFrame): Long-form data used in analysis.
+        model (OLS object): Fitted statsmodels OLS model.
+        anova_table (pd.DataFrame): ANOVA results from statsmodels.
+        tukey (TukeyHSDResults): Output from pairwise_tukeyhsd.
+
+    Returns:
+        dict: Summary row for the stats table.
+    """
+    import pandas as pd
+
+    # Get 3-way ANOVA interaction p-value
+    try:
+        interaction_p = anova_table.loc['C(apoe):C(disease):C(treatment)', 'PR(>F)']
+    except KeyError:
+        interaction_p = None
+
+    # Get model summary and coefficients
+    model_summary = model.summary2().tables[1]
+    model_summary = model_summary.drop('Intercept', errors='ignore')
+
+    # Largest absolute coefficient (excluding intercept)
+    largest_term = model_summary['Coef.'].abs().idxmax()
+    effect_size = model_summary.loc[largest_term, 'Coef.']
+    term_pval = model_summary.loc[largest_term, 'P>|t|']
+
+    # Extract Tukey results
+    res = pd.DataFrame(
+        data=tukey._results_table.data[1:], 
+        columns=tukey._results_table.data[0]
+    )
+    res['meandiff'] = res['meandiff'].astype(float)
+    res['p-adj'] = res['p-adj'].astype(float)
+
+    # Identify significant comparisons
+    sig_comparisons = res[res['p-adj'] < 0.05]
+    if not sig_comparisons.empty:
+        comp_strs = [
+            f"{row['group1']} {'<' if row['meandiff'] < 0 else '>'} {row['group2']} (Δ={row['meandiff']:.2f}%)"
+            for _, row in sig_comparisons.iterrows()
+        ]
+        comp_summary = "; ".join(comp_strs)
+        min_p = sig_comparisons['p-adj'].min()
+    else:
+        comp_summary = "None"
+        min_p = res['p-adj'].min()
+
+    return {
+        'Cell Type': cell_type,
+        'Sig. Tukey Comparisons': comp_summary,
+        'Min p-adj': round(min_p, 4),
+        'Three-Way ANOVA p': round(interaction_p, 4) if interaction_p is not None else 'NA',
+        'Largest Effect (Model Term)': largest_term,
+        'Effect Size (%)': round(effect_size, 2),
+        'Term p-value': round(term_pval, 4)
+    }
 
 
 def bivariate_quadrant_plot(
