@@ -1,3 +1,9 @@
+
+
+
+# ignore everything else at the root
+/*
+
 # keep these
 !/data/
 !/scripts/
@@ -6,15 +12,18 @@
 !/renv/
 !/renv.lock
 
-# don't track results
-/results/
+# dont track random script things
+/scripts/transcriptomic/__pycache__
+/scripts/transcriptomic/3d*
 
-
-# ignore everything else at the root
-/*
+# dont track the writing
+/Writing/
 
 # still explicitly ignore raw transcriptomic data
-/data/transcriptomic/raw/
+/data/
+
+# don't track results
+/results/
 
 # do not track saved AnnData objects
 /results/transcriptomic/tables/*.h5ad
