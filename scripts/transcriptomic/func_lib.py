@@ -1,5 +1,6 @@
 # This file contains the functions to be used in the notebooks for the project
 
+import re
 import scanpy as sc
 import scanpy.external as sce
 import matplotlib.pyplot as plt
@@ -773,68 +774,61 @@ def custom_volcano_plot(
     return fig
 
 
-def summarize_anova_tukey_results(cell_type, df_long, model, anova_table, tukey):
-    """
-    Summarizes three-way ANOVA and Tukey HSD test results for one cell type.
-    
-    Parameters:
-        cell_type (str): Name of the cell type.
-        df_long (pd.DataFrame): Long-form data used in analysis.
-        model (OLS object): Fitted statsmodels OLS model.
-        anova_table (pd.DataFrame): ANOVA results from statsmodels.
-        tukey (TukeyHSDResults): Output from pairwise_tukeyhsd.
-
-    Returns:
-        dict: Summary row for the stats table.
-    """
+def summarize_celltype_results(cell_type, model, anova_table, tukey, output_dir):
     import pandas as pd
+    import re
 
-    # Get 3-way ANOVA interaction p-value
+    # --- 3-Way ANOVA p ---
     try:
         interaction_p = anova_table.loc['C(apoe):C(disease):C(treatment)', 'PR(>F)']
     except KeyError:
         interaction_p = None
 
-    # Get model summary and coefficients
+    # --- Largest effect from OLS model ---
     model_summary = model.summary2().tables[1]
     model_summary = model_summary.drop('Intercept', errors='ignore')
+    largest_term_raw = model_summary['Coef.'].abs().idxmax()
+    effect_size = model_summary.loc[largest_term_raw, 'Coef.']
+    term_pval = model_summary.loc[largest_term_raw, 'P>|t|']
 
-    # Largest absolute coefficient (excluding intercept)
-    largest_term = model_summary['Coef.'].abs().idxmax()
-    effect_size = model_summary.loc[largest_term, 'Coef.']
-    term_pval = model_summary.loc[largest_term, 'P>|t|']
+    # Clean model term for readability
+    term = largest_term_raw.replace('C(', '').replace(')', '')
+    term = term.replace(':', ' × ')
+    term = re.sub(r'\[T\.(.*?)\]', r'=\1', term)
 
-    # Extract Tukey results
-    res = pd.DataFrame(
-        data=tukey._results_table.data[1:], 
-        columns=tukey._results_table.data[0]
-    )
+    # --- Tukey HSD ---
+    res = pd.DataFrame(data=tukey._results_table.data[1:], columns=tukey._results_table.data[0])
     res['meandiff'] = res['meandiff'].astype(float)
     res['p-adj'] = res['p-adj'].astype(float)
+    sig_res = res[res['p-adj'] < 0.05]
 
-    # Identify significant comparisons
-    sig_comparisons = res[res['p-adj'] < 0.05]
-    if not sig_comparisons.empty:
-        comp_strs = [
-            f"{row['group1']} {'<' if row['meandiff'] < 0 else '>'} {row['group2']} (Δ={row['meandiff']:.2f}%)"
-            for _, row in sig_comparisons.iterrows()
+    # --- Create DataFrames ---
+    top_df = pd.DataFrame({
+        'Statistic': ['3-way ANOVA p', 'Largest Effect Term', 'Effect Size (%)', 'p-value'],
+        'Value': [
+            round(interaction_p, 4) if interaction_p is not None else 'NA',
+            term,
+            round(effect_size, 2),
+            round(term_pval, 4)
         ]
-        comp_summary = "; ".join(comp_strs)
-        min_p = sig_comparisons['p-adj'].min()
-    else:
-        comp_summary = "None"
-        min_p = res['p-adj'].min()
+    })
 
-    return {
-        'Cell Type': cell_type,
-        'Sig. Tukey Comparisons': comp_summary,
-        'Min p-adj': round(min_p, 4),
-        'Three-Way ANOVA p': round(interaction_p, 4) if interaction_p is not None else 'NA',
-        'Largest Effect (Model Term)': largest_term,
-        'Effect Size (%)': round(effect_size, 2),
-        'Term p-value': round(term_pval, 4)
-    }
+    tukey_df = pd.DataFrame(columns=['Group 1', 'Group 2', 'Δ (%)', 'Tukey p-adj'])
+    if not sig_res.empty:
+        tukey_df['Group 1'] = sig_res['group1']
+        tukey_df['Group 2'] = sig_res['group2']
+        tukey_df['Δ (%)'] = sig_res['meandiff'].round(1)
+        tukey_df['Tukey p-adj'] = sig_res['p-adj'].round(4)
+        tukey_df = tukey_df.sort_values(by='Δ (%)', ascending=False)
 
+    # --- Write two separate CSVs ---
+    safe_ct = re.sub(r'\W+', '_', cell_type)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / f"{safe_ct}_summary.csv").write_text(top_df.to_csv(index=False))
+    (output_dir / f"{safe_ct}_tukey.csv").write_text(tukey_df.to_csv(index=False))
+
+    print(f"Saved summary CSV for {cell_type} to {output_dir}/{safe_ct}_summary.csv")
+    print(f"Saved Tukey CSV for {cell_type} to {output_dir}/{safe_ct}_tukey.csv")
 
 def bivariate_quadrant_plot(
     df1, df2,
